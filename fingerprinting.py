@@ -13,7 +13,7 @@ class FingerprintDB:
         self.positions = None
         self.macs = []
         self.grid_size = grid_size
-        self._acc_buffer = defaultdict(list)
+        self._acc_buffer = defaultdict(list) # defaultdict: 없는 키에 접근하면 자동으로 value 생성.
         self.required_samples = required_samples
 
     def _average_rssi(self, rssi_list):
@@ -35,8 +35,8 @@ class FingerprintDB:
         return {mac: float(col_mean[j]) for j, mac in enumerate(macs)}
 
     def collect(self, pos, rssi_vector):
-        pos_key = tuple(pos) if isinstance(pos, (list, tuple)) else (pos,)
-        self._acc_buffer[pos_key].append(rssi_vector.copy())
+        pos_key = tuple(pos) if isinstance(pos, (list, tuple)) else (pos,) #pos가 리스트나 튜플이면 튜플로 변환 아니라해도 하나만 넣어서 튜플화. 웬만하면 퓨틀이나 리스트임...!
+        self._acc_buffer[pos_key].append(rssi_vector.copy()) #셀 좌표에 해당하는 rssi 벡터를 추가. rssi 벡터는 딕셔너리 형태이고, 4개 이상의 mac이 들어있음.
         if len(self._acc_buffer[pos_key]) >= self.required_samples:
             avg = self._average_rssi(self._acc_buffer[pos_key])
             self.records.append({'pos': list(pos_key), 'rssi': avg})
@@ -47,13 +47,28 @@ class FingerprintDB:
     def build_index(self):
         if not self.records:
             raise RuntimeError("No records to index")
-        mac_set = set()
+        mac_set = set() # 중복된 mac 주소를 제거하기 위한 집합
         for rec in self.records:
-            mac_set.update(rec['rssi'].keys())
+            mac_set.update(rec['rssi'].keys()) # 딕셔너리의 모든 키 (mac 주소)를 추가.
         self.macs = sorted(mac_set)
         self.rssi_matrix = np.array(
             [[rec['rssi'].get(mac, -100) for mac in self.macs] for rec in self.records]
+            
         )
+        '''
+        self.records = 
+        [
+            {'rssi': {'A': -70, 'B': -80}}, 
+            {'rssi': {'B': -65, 'C': -90}}, 
+        ] 
+        위에서 아래로 저장.
+        self.rssi_matrix = 
+        [
+            [-70, -80, -100],  # 첫 rec: A=-70, B=-80, C 없음 → -100
+            [-100, -65, -90]   # 두 번째 rec: A 없음 → -100, B=-65, C=-90
+        ]
+        
+        '''
         self.positions = np.array([rec['pos'] for rec in self.records])
         self.norms = np.linalg.norm(self.rssi_matrix, axis=1)
         norm_matrix = self.norms[:, np.newaxis]
