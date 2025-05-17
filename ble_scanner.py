@@ -111,7 +111,7 @@ class RSSIPlotter(QWidget):
             if dq:
                 self.ax.plot(list(dq), label=mac)
         self.ax.legend(loc='upper right')
-        self.ax.set_ylim(-80, 0)   # RSSI 범위 고정
+        self.ax.set_ylim(-80, -40)   # RSSI 범위 고정
         self.ax.set_xlabel('sample index')
         self.ax.set_ylabel('RSSI (dBm)')
         self.canvas.draw_idle()
