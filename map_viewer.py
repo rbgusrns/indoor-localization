@@ -28,7 +28,7 @@ class MapViewer(QGraphicsView):
             self.fitInView(self.scene.sceneRect(), Qt.KeepAspectRatio)#비율 유지하게, 꽉차도록 조정...?
             self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-
+            self.showFullScreen()
         # 디버그 텍스트
         self.debug_text = QGraphicsTextItem()
         self.debug_text.setDefaultTextColor(Qt.blue)
