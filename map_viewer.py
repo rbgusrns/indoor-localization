@@ -9,23 +9,25 @@ import math
 class MapViewer(QGraphicsView):
     def __init__(self, map_path, px_per_m_x, px_per_m_y):
         super().__init__()
-        self.px_per_m_x = px_per_m_x
+        self.px_per_m_x = px_per_m_x 
         self.px_per_m_y = px_per_m_y
-        self.scene = QGraphicsScene()
-        self.setScene(self.scene)
+        # 실제세계 -> 픽셀 변환 비율. 미터당 픽셀.
+        self.scene = QGraphicsScene() # 씬 객체 생성
+        self.setScene(self.scene) # 앞으로 이 씬에서 작업을 하겠다.
 
         # 맵 이미지 로딩
-        pixmap = QPixmap(map_path)
+        pixmap = QPixmap(map_path) 
         if pixmap.isNull():
             print(f"맵 이미지 로드 실패: {map_path}")
-        else:
+        else: # 맵 이미지 로드 및 초기화 작업들
             self.pixmap_item = QGraphicsPixmapItem(pixmap) #map을 아이템화
-            self.pixmap_item.setTransformOriginPoint(self.pixmap_item.boundingRect().center())
-            self.scene.addItem(self.pixmap_item) #씬에 아이템 추가
-            self.scene.setSceneRect(QRectF(pixmap.rect())) #씬의 크기를 맵 이미지 크기로 설정
-            self.setMinimumSize(pixmap.width(), pixmap.height())#창의 최소 크기를 이미지 크기만큼 보장
-            self.fitInView(self.scene.sceneRect(), Qt.KeepAspectRatio)#비율 유지하게, 꽉차도록 조정.
-            
+            self.pixmap_item.setTransformOriginPoint(self.pixmap_item.boundingRect().center()) # 이미지의 모서리 사각형을 따고, 그 중심을 잡아서 회전의 중심으로 함. 
+            self.scene.addItem(self.pixmap_item) #씬에 지도 아이템을 추가한다.
+            self.scene.setSceneRect(QRectF(pixmap.rect())) #지도의 이미지 크기를 사각형으로 잡고, 씬의 영역을 그 크기로 설정함. 이 영역 안에서만 아이템이 보이고 ,스크롤 바도 이를 기준으로 잡힘. 논리적 크기 설정.
+            #self.setMinimumSize(pixmap.width(), pixmap.height()) #이 창은 이미지 크기보다 작아질 수가 없음.
+            self.fitInView(self.scene.sceneRect(), Qt.KeepAspectRatio)#비율 유지하게, 꽉차도록 조정...?
+            self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
         # 디버그 텍스트
         self.debug_text = QGraphicsTextItem()
@@ -37,7 +39,7 @@ class MapViewer(QGraphicsView):
         self.est_marker = None
         self.heading_arrow = None
 
-    def update_heading(self, heading_deg):
+    def update_heading(self, heading_deg): #나는 중심에 있고, 지도가 회전하도록 하는 메서드
         """heading_deg: 실제 heading (내가 바라보는 각도)"""
         rotation_angle = -heading_deg  # 지도는 반대 방향으로 회전
         transform = QTransform().rotate(rotation_angle)
@@ -87,3 +89,5 @@ class MapViewer(QGraphicsView):
         arrow.setZValue(19)
         self.scene.addItem(arrow)
         self.heading_arrow = arrow
+        
+

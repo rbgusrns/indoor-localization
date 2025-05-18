@@ -1,7 +1,7 @@
 import sys
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QGraphicsEllipseItem, QGraphicsPixmapItem
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QGraphicsEllipseItem, QGraphicsPixmapItem, QShortcut
 from PyQt5.QtCore import Qt, QRectF
-from PyQt5.QtGui import QPixmap
+from PyQt5.QtGui import QPixmap, QKeySequence
 
 from app_config import load_config
 from ble_scanner import BLEScanThread
@@ -39,7 +39,7 @@ class CalibViewer(MapViewer): # 맵을 띄우고, 셀의좌표를 입력받아 �
             item = QGraphicsPixmapItem(pixmap) #지도를 아이템화
             self.scene.addItem(item) #씬에 지도 추가
             self.scene.setSceneRect(QRectF(pixmap.rect())) #씬의 크기를 맵 이미지 크기로 설정
-            self.setMinimumSize(int(pixmap.width()), int(pixmap.height())) #창의 최소 크기를 이미지 크기만큼 보장
+            #self.setMinimumSize(int(pixmap.width()), int(pixmap.height())) #창의 최소 크기를 이미지 크기만큼 보장
         self.fitInView(self.scene.sceneRect(), Qt.KeepAspectRatio) #비율 유지하게, 꽉차도록 조정.
         self.calib_marker = None
 
@@ -80,20 +80,22 @@ class CalibrationWindow(QWidget):
         map_path = self.cfg.get('map_file', '203.png')
         self.viewer = CalibViewer(map_path, px_per_m_x, px_per_m_y)
         self.viewer.mark_calibration_point(self.current_x, self.current_y)
+        self.setFocusPolicy(Qt.StrongFocus)
 
-        start_btn = QPushButton("Start Calibration")
-        next_btn = QPushButton("Next Point")
-        stop_btn = QPushButton("Stop and Save")
-
-        start_btn.clicked.connect(self.thread.start)
-        next_btn.clicked.connect(self.next_point)
-        stop_btn.clicked.connect(self.finish)
-
+        scan_F = QShortcut(QKeySequence("G"), self.viewer)
+        scan_F.activated.connect(lambda: self.thread.start() if not self.thread.isRunning() else None)
+        
+        stop_F = QShortcut(QKeySequence("X"), self.viewer)
+        stop_F.activated.connect(lambda: self.thread.stop() if self.thread.isRunning() else None)
+        
+        next_F = QShortcut(QKeySequence("N"), self.viewer) 
+        next_F.activated.connect(lambda: self.next_point() if not self.thread.isRunning() else None)
+        
+        finish_F = QShortcut(QKeySequence("Q"), self.viewer)
+        finish_F.activated.connect(lambda: self.finish() if not self.thread.isRunning() else None)
+        
         layout = QVBoxLayout(self)
         layout.addWidget(self.viewer)
-        layout.addWidget(start_btn)
-        layout.addWidget(next_btn)
-        layout.addWidget(stop_btn)
         self.setLayout(layout)
         self.setWindowTitle("Fingerprint Calibration")
         #self.showFullScreen()
@@ -138,4 +140,5 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     win = CalibrationWindow()
     win.show()
+    win.setFocus()
     sys.exit(app.exec_())
