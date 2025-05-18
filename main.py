@@ -51,7 +51,7 @@ def on_detect(rssi_vec, mv, fp, ekf, k, speed, yaw):
         #print(f"{fused_pos}")
         # 6) UI 업데이트
         mv.update_debug(merged, fused_pos, dists)
-        mv.mark_estimated_position(*fused_pos)
+        mv.mark_estimated_position(*fused_pos, yaw)
 
 # 초기 속성
 on_detect.rssi = {}
@@ -69,16 +69,29 @@ if __name__ == "__main__":
     
     # IMU 시리얼 리더 설정
     serial_reader = SerialReader(port=cfg.get('imu_port', 'COM8'), baudrate=115200)
-
-    # IMU 콜백: 속도, yaw(deg)만 받아옴
-    def imu_callback(speed, yaw):
+    fused_pos = (1.2, 0.3)
+    temp_pos = (1.2, 0.3)
+    def speed_callback(speed = 0.0):
+        global fused_pos
         on_detect.speed = speed
-        on_detect.yaw = yaw
         
-        ekf.predict(yaw, speed)
+        ekf.predict(on_detect.yaw, speed)
         fused_pos = ekf.get_state()[:2]
-        mv.mark_estimated_position(*fused_pos, yaw)
-    serial_reader.received.connect(imu_callback)
+        #mv.mark_estimated_position(*fused_pos,on_detect.yaw) #*fused_pos: 언패킹. 튜플이나 리스트이면 값을 풀어서 전달함.
+
+    def yaw_callback(yaw):
+        global fused_pos
+        on_detect.yaw = yaw
+        on_detect.speed = 0.0
+        #ekf.predict(on_detect.yaw, on_detect.speed)
+        #fused_pos = ekf.get_state()[:2]
+        #mv.mark_estimated_position(*temp_pos,on_detect.yaw)
+        mv.mark_estimated_position(*fused_pos,on_detect.yaw)
+        
+
+
+    serial_reader.heading_received.connect(yaw_callback)
+    serial_reader.speed_received.connect(speed_callback)
     serial_reader.start()
 
     # EKF 초기화
@@ -92,7 +105,8 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     widget = QWidget()
     mv = MapViewer(cfg['map_file'], cfg['px_per_m_x'], cfg['px_per_m_y'])
-    mv.mark_estimated_position(0, 0, 0.0)
+    mv.mark_estimated_position(1.2, 0.3,90.0) # 초기 위치
+    #mv.update_heading(180.0)
 
     # BLE 스캐너 설정
     thread = BLEScanThread(cfg)
@@ -123,6 +137,19 @@ if __name__ == "__main__":
         rssi_mutex.unlock()
     clear_timer.timeout.connect(clear_rssi)
     clear_timer.start(2000)
+    
+    '''
+    update_timer = QTimer()
+    def update_position():
+        global fused_pos
+        global temp_pos
+        temp_pos = fused_pos # 속도 패킷이 들어왔을 때만 위치를 업데이트 하기위한 임시 position
+        #print(f"EKF: {ekf.get_state()[:2]}")
+        #mv.mark_estimated_position(*fused_pos, on_detect.yaw)
+    
+    update_timer.timeout.connect(update_position)
+    update_timer.start(500) # 0.5초마다 위치 업데이트
+    '''
 
     # 이벤트 루프 시작
     sys.exit(app.exec_())

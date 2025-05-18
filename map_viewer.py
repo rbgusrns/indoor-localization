@@ -1,5 +1,5 @@
 from PyQt5.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsTextItem, QGraphicsEllipseItem, QGraphicsPixmapItem, QGraphicsPolygonItem
-from PyQt5.QtGui import QPainter, QPen, QBrush, QPixmap, QPolygonF
+from PyQt5.QtGui import QPainter, QPen, QBrush, QPixmap, QPolygonF, QTransform
 from PyQt5.QtCore import Qt, QRectF, QPointF
 import math
 
@@ -19,26 +19,37 @@ class MapViewer(QGraphicsView):
         if pixmap.isNull():
             print(f"맵 이미지 로드 실패: {map_path}")
         else:
-            pixmap_item = QGraphicsPixmapItem(pixmap) #map을 아이템화
-            self.scene.addItem(pixmap_item) #씬에 아이템 추가
+            self.pixmap_item = QGraphicsPixmapItem(pixmap) #map을 아이템화
+            self.pixmap_item.setTransformOriginPoint(self.pixmap_item.boundingRect().center())
+            self.scene.addItem(self.pixmap_item) #씬에 아이템 추가
             self.scene.setSceneRect(QRectF(pixmap.rect())) #씬의 크기를 맵 이미지 크기로 설정
             self.setMinimumSize(pixmap.width(), pixmap.height())#창의 최소 크기를 이미지 크기만큼 보장
             self.fitInView(self.scene.sceneRect(), Qt.KeepAspectRatio)#비율 유지하게, 꽉차도록 조정.
+            
 
         # 디버그 텍스트
         self.debug_text = QGraphicsTextItem()
         self.debug_text.setDefaultTextColor(Qt.blue)
         self.debug_text.setPos(10, 10)
+        
         self.scene.addItem(self.debug_text)
 
         self.est_marker = None
         self.heading_arrow = None
 
+    def update_heading(self, heading_deg):
+        """heading_deg: 실제 heading (내가 바라보는 각도)"""
+        rotation_angle = -heading_deg  # 지도는 반대 방향으로 회전
+        transform = QTransform().rotate(rotation_angle)
+        self.pixmap_item.setTransform(transform)
+            
     def update_debug(self, rssi_vec, pos, dist_list):
         text = f"RSSI: {rssi_vec}\nPos: {pos.round(2)}\nDists: {dist_list.round(2)}"
         self.debug_text.setPlainText(text)
 
-    def mark_estimated_position(self, x, y, heading_deg=0.0): #x,y,방향을 받아서 맵에 표시
+
+
+    def mark_estimated_position(self, x, y,heading): #x,y,방향을 받아서 맵에 표시
         
         if self.est_marker:
             self.scene.removeItem(self.est_marker)
@@ -59,7 +70,7 @@ class MapViewer(QGraphicsView):
         self.est_marker = marker
 
         # 삼각형 화살표
-        rad = math.radians(heading_deg)
+        rad = math.radians(heading)
         size = 13  # 삼각형 크기
 
         # 삼각형 정점 계산
