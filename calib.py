@@ -116,7 +116,7 @@ class CalibrationWindow(QWidget):
         self.tmp_vec.update(vec) # vec는 {mac: rssi} 형태로 들어옴. 딕셔너리에 .update하면 추가되거나 수정.
 
         # 4개 이상 비콘만 수신되면 수집 시작
-        if len(self.tmp_vec) >= 4:  
+        if len(self.tmp_vec) >= 6:  
             pos = (self.current_x, self.current_y) #현재 셀 위치
             collected = self.fpdb.collect(pos, self.tmp_vec.copy())
             print(f"Collected @ {pos}: {self.tmp_vec}")
