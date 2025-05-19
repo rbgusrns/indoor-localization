@@ -32,11 +32,12 @@ def on_detect(rssi_vec, mv, fp, ekf, k, speed, yaw):
     rssi_mutex.unlock()
 
     #BLE fingerprinting으로 위치 추정
-    if len(on_detect.rssi) >= 4: #BLE 스캔으로 받은 RSSI가 일정 개수 이상일 때만
+    if len(on_detect.rssi) >= 6: #BLE 스캔으로 받은 RSSI가 일정 개수 이상일 때만
         
         pts, candidates , dists = fp.get_position(merged, k=k)
         pts = np.array(pts)
-        print(f"RSSI: {on_detect.rssi} BLE: {pts} ")
+        #print(f"RSSI: {on_detect.rssi} BLE: {pts} ")
+        print(f"BLE: {candidates} ")
         #print(f"BLE: {pts}")
         dists = np.array(dists)
         #weights = 1.0 / (dists + 1e-5)
@@ -144,7 +145,7 @@ if __name__ == "__main__":
     widget.setLayout(layout) #위젯에 레이아웃 적용.
     widget.setFocusPolicy(Qt.StrongFocus) #위젯이 포커스를 받을 자격을 준다. 포커스 = 마우스로 클릭했을 때 그 상황. 
     widget.show() #버튼 두개와 맵을 담은 위젯을 보여줌.
-    widget.showFullScreen()
+    #widget.showFullScreen()
     widget.setFocus() #위젯에게 포커스 부여.
     widget.setWindowTitle("ODIGA") #제목 설정
     

@@ -1,8 +1,8 @@
- px_per_m_x: 74.07
- px_per_m_y: 73.61
+ px_per_m_x: 100
+ px_per_m_y: 106
  scan_interval: 0.2
  filter_window: 5
- k_neighbors: 1
+ k_neighbors: 3
  map_file: "105.png"
  beacon_macs:
    - "C3:00:00:44:DC:1A"

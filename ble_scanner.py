@@ -39,7 +39,7 @@ class BLEScanThread(QThread): # 멀티쓰레딩으로 RSSI 신호를 받고, 저
             filt = self.filters[addr].filtering(rssi) #칼만필터 및 이동평균필터 적용. 
             # print(f"\"Detected {addr}: {rssi}, {filt}\",") 
             #self.detected.emit({addr: filt}) #주소와 필터링된 rssi값을 딕셔너리 형태로 emit. -> BLEScanThread 클래스의 detected 시그널을 발생시킴.
-            self.detected.emit({addr: rssi})
+            self.detected.emit({addr: filt})
     async def scan_loop(self): #스캔 루프.
         scanner = BleakScanner() # 비동기 ble 라이브러리.
         scanner.register_detection_callback(self.detection_callback) #콜백함수 직접 등록. ->detection_callback
