@@ -16,7 +16,7 @@ room_width_m = 10.8
 room_height_m = 7.2
 grid_width = 8
 grid_height = 5
-
+BEACON_COUNT = 6
 # 미터 → 픽셀 스케일 계산
 px_per_m_x = map_px_width  / room_width_m    # ≈74px/m 1m에 74픽셀.
 px_per_m_y = map_px_height / room_height_m   # ≈73.6px/m
@@ -83,7 +83,13 @@ class CalibrationWindow(QWidget):
         self.setFocusPolicy(Qt.StrongFocus)
 
         scan_F = QShortcut(QKeySequence("G"), self.viewer)
-        scan_F.activated.connect(lambda: self.thread.start() if not self.thread.isRunning() else None)
+        scan_F.activated.connect(
+            lambda: (
+                print(f"pos: {self.current_x},{self.current_y} START!!") or self.thread.start()
+                if not self.thread.isRunning()
+                else None
+            )
+        )
         
         stop_F = QShortcut(QKeySequence("X"), self.viewer)
         stop_F.activated.connect(lambda: self.thread.stop() if self.thread.isRunning() else None)
@@ -115,15 +121,17 @@ class CalibrationWindow(QWidget):
     def on_scan(self, vec):
         self.tmp_vec.update(vec) # vec는 {mac: rssi} 형태로 들어옴. 딕셔너리에 .update하면 추가되거나 수정.
 
-        # 4개 이상 비콘만 수신되면 수집 시작
-        if len(self.tmp_vec) >= 6:  
+        # 특정 개수 이상 수집될때까지 대기하다가, 도달하면 저장함.
+        if len(self.tmp_vec) >= BEACON_COUNT: 
             pos = (self.current_x, self.current_y) #현재 셀 위치
-            collected = self.fpdb.collect(pos, self.tmp_vec.copy())
-            print(f"Collected @ {pos}: {self.tmp_vec}")
+            collected = self.fpdb.collect(pos, self.tmp_vec.copy()) #현재 셀 좌표, 특정 개수 이상의 RSSI 딕셔너리 넘김
+            #print(f"Collected @ {pos}: {self.tmp_vec}")
             self.tmp_vec.clear()
 
             if collected:
                 print(f"저장 완료 @ {pos} (샘플 누적됨)")
+                self.thread.stop()
+                self.next_point()
 
 
 

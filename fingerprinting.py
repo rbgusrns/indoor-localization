@@ -4,7 +4,7 @@ from sklearn.neighbors import BallTree
 from collections import defaultdict
 
 class FingerprintDB:
-    def __init__(self, grid_size=(1.0, 1.0), required_samples=20):
+    def __init__(self, grid_size=(1.0, 1.0), required_samples=50):
         self.records = []
         self.tree = None
         self.rssi_matrix = None
@@ -36,9 +36,11 @@ class FingerprintDB:
 
     def collect(self, pos, rssi_vector):
         pos_key = tuple(pos) if isinstance(pos, (list, tuple)) else (pos,) #pos가 리스트나 튜플이면 튜플로 변환 아니라해도 하나만 넣어서 튜플화. 웬만하면 퓨틀이나 리스트임...!
+        #print(pos_key)
         self._acc_buffer[pos_key].append(rssi_vector.copy()) #셀 좌표에 해당하는 rssi 벡터를 추가. rssi 벡터는 딕셔너리 형태이고, 4개 이상의 mac이 들어있음.
+        #print(self._acc_buffer[pos_key])                    #들어올때마다 점차 중복되며 쌓인다..
         if len(self._acc_buffer[pos_key]) >= self.required_samples:
-            avg = self._average_rssi(self._acc_buffer[pos_key])
+            avg = self._average_rssi(self._acc_buffer[pos_key]) #모은 샘플을 평균냄.
             self.records.append({'pos': list(pos_key), 'rssi': avg})
             self._acc_buffer[pos_key] = []
             return True
