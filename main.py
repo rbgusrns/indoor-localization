@@ -70,7 +70,7 @@ def yaw_callback(yaw):
     #ekf.predict(on_detect.yaw, on_detect.speed)
     #fused_pos = ekf.get_state()[:2]
     #mv.mark_estimated_position(*temp_pos,on_detect.yaw)
-    mv.mark_estimated_position(*fused_pos,on_detect.yaw)
+    mv.move_to(*fused_pos,on_detect.yaw)
     
     
 
