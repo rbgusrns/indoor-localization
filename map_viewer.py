@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsTextItem, QGraphicsEllipseItem, QGraphicsPixmapItem, QGraphicsPolygonItem
 from PyQt5.QtGui import QPainter, QPen, QBrush, QPixmap, QPolygonF, QTransform
-from PyQt5.QtCore import Qt, QRectF, QPointF
+from PyQt5.QtCore import Qt, QRectF, QPointF, QTimer
 import math
 
 '''
@@ -39,55 +39,67 @@ class MapViewer(QGraphicsView):
         self.est_marker = None
         self.heading_arrow = None
 
-    def update_heading(self, heading_deg): #나는 중심에 있고, 지도가 회전하도록 하는 메서드
-        """heading_deg: 실제 heading (내가 바라보는 각도)"""
-        rotation_angle = -heading_deg  # 지도는 반대 방향으로 회전
-        transform = QTransform().rotate(rotation_angle)
-        self.pixmap_item.setTransform(transform)
-            
-    def update_debug(self, rssi_vec, pos, dist_list):
-        text = f"RSSI: {rssi_vec}\nPos: {pos.round(2)}\nDists: {dist_list.round(2)}"
-        self.debug_text.setPlainText(text)
-
-
-
-    def mark_estimated_position(self, x, y,heading): #x,y,방향을 받아서 맵에 표시
-        
-        if self.est_marker:
-            self.scene.removeItem(self.est_marker)
-        if self.heading_arrow:
-            self.scene.removeItem(self.heading_arrow)
-
-        # 실제 좌표 → 픽셀
+    def _init_est_items(self, x, y, heading):
+        # 최초 한 번만 실행 → marker·arrow 생성
         px = x * self.px_per_m_x
         py = y * self.px_per_m_y
-
-        # 위치 마커
         radius = 5
-        marker = QGraphicsEllipseItem(px - radius, py - radius, radius * 2, radius * 2) #위치 및 크기 설정
-        marker.setBrush(Qt.red)
-        marker.setPen(QPen(Qt.red, 1))
-        marker.setZValue(20)
-        self.scene.addItem(marker)
-        self.est_marker = marker
 
-        # 삼각형 화살표
+        self.est_marker = QGraphicsEllipseItem(-radius, -radius, radius*2, radius*2)
+        self.est_marker.setBrush(Qt.red)
+        self.est_marker.setPen(QPen(Qt.red,1))
+        self.est_marker.setZValue(20)
+        self.est_marker.setPos(px, py)
+        self.scene.addItem(self.est_marker)
+
+        self.heading_arrow = QGraphicsPolygonItem()
+        self.heading_arrow.setBrush(Qt.red)
+        self.heading_arrow.setPen(QPen(Qt.red,1))
+        self.heading_arrow.setZValue(19)
+        self.scene.addItem(self.heading_arrow)
+        self._update_arrow(px, py, heading)
+
+        # 현재 상태 저장
+        self._cur_pos = QPointF(px, py)
+        self._cur_heading = heading
+
+    def _update_arrow(self, px, py, heading):
         rad = math.radians(heading)
-        size = 13  # 삼각형 크기
-
-        # 삼각형 정점 계산
+        size = 13
         tip = QPointF(px + size * math.cos(rad), py + size * math.sin(rad))
-        left = QPointF(px + size * 0.5 * math.cos(rad + math.radians(135)),
-                       py + size * 0.5 * math.sin(rad + math.radians(135)))
-        right = QPointF(px + size * 0.5 * math.cos(rad - math.radians(135)),
-                        py + size * 0.5 * math.sin(rad - math.radians(135)))
+        left = QPointF(px + size*0.5*math.cos(rad+math.radians(135)),
+                       py + size*0.5*math.sin(rad+math.radians(135)))
+        right = QPointF(px + size*0.5*math.cos(rad-math.radians(135)),
+                        py + size*0.5*math.sin(rad-math.radians(135)))
+        poly = QPolygonF([tip, left, right])
+        self.heading_arrow.setPolygon(poly)
 
-        triangle = QPolygonF([tip, left, right])
-        arrow = QGraphicsPolygonItem(triangle)
-        arrow.setBrush(QBrush(Qt.red))
-        arrow.setPen(QPen(Qt.red, 1))
-        arrow.setZValue(19)
-        self.scene.addItem(arrow)
-        self.heading_arrow = arrow
-        
+    def move_to(self, x, y, heading, duration=200):
+        """
+        x,y,heading → 부드럽게(duration ms) 보간
+        """
+        if self.est_marker is None or self.heading_arrow is None:
+            self._init_est_items(x,y,heading)
+            return
 
+        start_pos = self._cur_pos
+        end_pos = QPointF(x*self.px_per_m_x, y*self.px_per_m_y)
+        start_h = self._cur_heading
+        end_h = heading
+
+        steps = 10
+        for i in range(1, steps+1):
+            t = i/steps
+            px = start_pos.x() + (end_pos.x()-start_pos.x())*t
+            py = start_pos.y() + (end_pos.y()-start_pos.y())*t
+            hd = start_h + (end_h-start_h)*t
+            QTimer.singleShot(int(duration*t), 
+                lambda px=px, py=py, hd=hd: (
+                    self.est_marker.setPos(px, py),
+                    self._update_arrow(px, py, hd)
+                )
+            )
+
+        # 최종 상태 업데이트
+        self._cur_pos = end_pos
+        self._cur_heading = end_h
