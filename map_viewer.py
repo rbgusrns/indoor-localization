@@ -84,15 +84,17 @@ class MapViewer(QGraphicsView):
 
         start_pos = self._cur_pos
         end_pos = QPointF(x*self.px_per_m_x, y*self.px_per_m_y)
-        start_h = self._cur_heading
-        end_h = heading
+        start_h = self._cur_heading % 360
+        end_h = heading % 360
+
+        delta_h = (end_h - start_h + 180) % 360 - 180
 
         steps = 10
         for i in range(1, steps+1):
             t = i/steps
             px = start_pos.x() + (end_pos.x()-start_pos.x())*t
             py = start_pos.y() + (end_pos.y()-start_pos.y())*t
-            hd = start_h + (end_h-start_h)*t
+            hd = start_h + delta_h*t
             QTimer.singleShot(int(duration*t), 
                 lambda px=px, py=py, hd=hd: (
                     self.est_marker.setPos(px, py),
@@ -102,4 +104,4 @@ class MapViewer(QGraphicsView):
 
         # 최종 상태 업데이트
         self._cur_pos = end_pos
-        self._cur_heading = end_h
+        self._cur_heading = (start_h + delta_h) % 360
