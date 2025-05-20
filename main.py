@@ -116,7 +116,7 @@ if __name__ == "__main__":
     app = QApplication(sys.argv) #어플리케이션 엔진 생성 sys.argv는 실행 옵션이며, 터미널에서 넘긴 인자를 저장
     widget = QWidget() # 빈 창을 생성.
     mv = MapViewer(cfg['map_file'], cfg['px_per_m_x'], cfg['px_per_m_y']) #맵 뷰어 객체 생성
-    mv.mark_estimated_position(INIT_X, INIT_Y,INIT_YAW) # 초기 위치
+    mv._init_est_items(INIT_X, INIT_Y,INIT_YAW) # 초기 위치
     #mv.update_heading(180.0)
 
     # BLE 스캐너 설정
