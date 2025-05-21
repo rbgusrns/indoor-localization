@@ -3,7 +3,7 @@
  scan_interval: 0.2
  filter_window: 5
  k_neighbors: 3
- map_file: "105.png"
+ map_file: "Haedang.png"
  beacon_macs:
    - "C3:00:00:44:DC:1A"
    - "C3:00:00:44:DC:1B"
