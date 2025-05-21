@@ -42,6 +42,7 @@ class MapViewer(QGraphicsView):
 
     def _init_est_items(self, x, y, heading):
         # 최초 한 번만 실행 → marker·arrow 생성
+        # 1380, 1000
         px = x * self.px_per_m_x
         py = y * self.px_per_m_y
         radius = 5
@@ -107,4 +108,5 @@ class MapViewer(QGraphicsView):
 
         # 최종 상태 업데이트
         self._cur_pos = end_pos
+        print(self._cur_pos)
         self._cur_heading = (start_h + delta_h) % 360
