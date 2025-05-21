@@ -119,7 +119,7 @@ if __name__ == "__main__":
     widget = QWidget() # 빈 창을 생성.
     mv = MapViewer(cfg['map_file'], cfg['px_per_m_x'], cfg['px_per_m_y']) #맵 뷰어 객체 생성
     mv._init_est_items(INIT_X, INIT_Y,INIT_YAW) # 초기 위치
-    #mv.update_heading(180.0)
+    mv.update_heading(INIT_YAW)
 
     # BLE 스캐너 설정
     thread = BLEScanThread(cfg) #BLE 스캐너 쓰레드 객체 생성
