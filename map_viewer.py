@@ -29,6 +29,7 @@ class MapViewer(QGraphicsView):
             self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             self.showFullScreen()
+            self.scale(2.0, 2.0)
 
         # 디버그 텍스트
         self.debug_text = QGraphicsTextItem()
