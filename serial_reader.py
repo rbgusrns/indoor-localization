@@ -16,7 +16,7 @@ class SerialReader(QThread):
                 line = self.ser.readline().decode().strip()
                 if line.startswith("Y"):
                     try:
-                        heading = int(line[1:].strip()) / 10
+                        heading = (int(line[1:].strip()) / 10 - 90) % 360
                         #print("Heading:", heading)
                         self.heading_received.emit(heading)
                     except ValueError:
