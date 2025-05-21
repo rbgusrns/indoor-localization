@@ -78,7 +78,7 @@ def yaw_callback(yaw):
 # INIT_X,INIT_Y = (1306,978) 픽셀
 #INIT_X,INIT_Y = (37.5,37.5) -> 681,668
 #INIT_X,INIT_Y = (71.93,54.91) -> (909,668)
-INIT_X,INIT_Y = (120,80)
+INIT_X,INIT_Y = (110,80)
 INIT_YAW = 90.0
 # 초기 위치 설정
 
@@ -87,7 +87,7 @@ temp_pos = (INIT_X, INIT_Y) #초기 위치 설정
 
 on_detect.rssi = {}
 on_detect.speed = 0.0
-on_detect.yaw = 0.0
+on_detect.yaw = INIT_YAW
 
 if __name__ == "__main__":
     # 설정 로드
