@@ -79,7 +79,7 @@ def yaw_callback(yaw):
 #INIT_X,INIT_Y = (37.5,37.5) -> 681,668
 #INIT_X,INIT_Y = (71.93,54.91) -> (909,668)
 INIT_X,INIT_Y = (36.5,28)
-INIT_YAW = 90.0
+INIT_YAW = 180.0
 # 초기 위치 설정
 
 fused_pos = (INIT_X, INIT_Y) # 초기 위치 설정
