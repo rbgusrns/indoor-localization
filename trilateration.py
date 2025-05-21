@@ -124,7 +124,7 @@ class EKF:
 
         self.x = np.zeros(self.n)
         self.x[0] = 1380  # 초기 x 위치
-        self.x[1] = 1000
+        self.x[1] = 0
         self.x[2] = 0.0  # 초기 yaw
         self.P = np.eye(self.n) * 0.1
         self.Q = np.diag([0.05, 0.05, 0.01, 0.1])
