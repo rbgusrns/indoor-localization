@@ -76,7 +76,7 @@ def yaw_callback(yaw):
 
 # 초기 속성
 
-INIT_X,INIT_Y = (1306,978)
+INIT_X,INIT_Y = (37.5,37.5)
 INIT_YAW = 90.0
 # 초기 위치 설정
 
