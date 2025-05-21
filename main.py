@@ -145,7 +145,7 @@ if __name__ == "__main__":
     widget.setLayout(layout) #위젯에 레이아웃 적용.
     widget.setFocusPolicy(Qt.StrongFocus) #위젯이 포커스를 받을 자격을 준다. 포커스 = 마우스로 클릭했을 때 그 상황. 
     widget.show() #버튼 두개와 맵을 담은 위젯을 보여줌.
-    #widget.showFullScreen()
+    widget.showFullScreen()
     widget.setFocus() #위젯에게 포커스 부여.
     widget.setWindowTitle("ODIGA") #제목 설정
     

@@ -25,7 +25,7 @@ class MapViewer(QGraphicsView):
             self.scene.addItem(self.pixmap_item) #씬에 지도 아이템을 추가한다.
             self.scene.setSceneRect(QRectF(pixmap.rect())) #지도의 이미지 크기를 사각형으로 잡고, 씬의 영역을 그 크기로 설정함. 이 영역 안에서만 아이템이 보이고 ,스크롤 바도 이를 기준으로 잡힘. 논리적 크기 설정.
             #self.setMinimumSize(pixmap.width(), pixmap.height()) #이 창은 이미지 크기보다 작아질 수가 없음.
-            self.fitInView(self.scene.sceneRect(), Qt.KeepAspectRatio)#비율 유지하게, 꽉차도록 조정...?
+            #self.fitInView(self.scene.sceneRect(), Qt.KeepAspectRatio)#비율 유지하게, 꽉차도록 조정...?
             self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             self.showFullScreen()
