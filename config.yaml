@@ -1,5 +1,5 @@
- px_per_m_x: 30.2
- px_per_m_y: 30.2
+ px_per_m_x: 35.2
+ px_per_m_y: 35.2
  scan_interval: 0.2
  filter_window: 5
  k_neighbors: 3
