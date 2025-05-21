@@ -29,6 +29,7 @@ class MapViewer(QGraphicsView):
             self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             self.showFullScreen()
+
         # 디버그 텍스트
         self.debug_text = QGraphicsTextItem()
         self.debug_text.setDefaultTextColor(Qt.blue)
@@ -62,6 +63,7 @@ class MapViewer(QGraphicsView):
         # 현재 상태 저장
         self._cur_pos = QPointF(px, py)
         self._cur_heading = heading
+        self.centerOn(self._cur_pos)
 
     def _update_arrow(self, px, py, heading):
         rad = math.radians(heading)
@@ -98,7 +100,8 @@ class MapViewer(QGraphicsView):
             QTimer.singleShot(int(duration*t), 
                 lambda px=px, py=py, hd=hd: (
                     self.est_marker.setPos(px, py),
-                    self._update_arrow(px, py, hd)
+                    self._update_arrow(px, py, hd),
+                    self.centerOn(QPointF(px, py))
                 )
             )
 
