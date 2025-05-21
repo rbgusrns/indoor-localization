@@ -123,7 +123,7 @@ class EKF:
         self.m = 2  # 측정: [x_ble, y_ble]
 
         self.x = np.zeros(self.n)
-        self.x[0] = 110  # 초기 x 위치
+        self.x[0] = 106  # 초기 x 위치
         self.x[1] = 80
         self.x[2] = 90.0  # 초기 yaw
         self.P = np.eye(self.n) * 0.1
