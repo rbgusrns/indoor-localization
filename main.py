@@ -139,7 +139,7 @@ class IndoorPositioningApp(QWidget):
         start_grid, end_grid = self.meters_to_grid(start_m), self.meters_to_grid(end_m)
         if self.last_start_grid == start_grid: return
         self.last_start_grid = start_grid
-        path_grid = find_path(self.binary_grid, start_grid, end_grid, self.distance_map, self.max_dist, self.config.get('penalty_strength', 10.0))
+        path_grid = find_path(self.binary_grid, start_grid, end_grid, self.distance_map, self.max_dist, self.config.get('penalty_strength', 2.5))
         path_pixels = [self.grid_to_pixels(pos) for pos in path_grid] if path_grid else None
         self.map_viewer.draw_path(path_pixels)
     
