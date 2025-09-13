@@ -136,7 +136,7 @@ class IndoorPositioningApp(QWidget):
         self.last_start_grid = start_grid
 
         print(f"경로 갱신: {start_grid} -> {end_grid}")
-        penalty_strength = self.config.get('penalty_strength', 6.0)
+        penalty_strength = self.config.get('penalty_strength', 3.0)
         path_grid = find_path(
             self.binary_grid, start_grid, end_grid,
             self.distance_map, self.max_dist, penalty_strength
