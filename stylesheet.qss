@@ -31,3 +31,5 @@ color: white; / 흰색 글씨 /
 font-size: 28px; / 글씨 크기 /
 padding: 15px 30px; / 안쪽 여백 (상하, 좌우) */
 border
+
+}
