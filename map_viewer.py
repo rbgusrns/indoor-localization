@@ -6,7 +6,7 @@ import math
 
 class MapViewer(QGraphicsView):
     """
-    지도, 사용자 위치, 경로, 화살표 등 모든 시각적 요소를 관리하는 클래스.
+    지도, 사용자 위치, 경로 등 모든 시각적 요소를 관리하는 클래스.
     """
     def __init__(self, map_path, px_per_m_x, px_per_m_y):
         super().__init__()
@@ -15,9 +15,8 @@ class MapViewer(QGraphicsView):
         self.scene = QGraphicsScene()
         self.setScene(self.scene)
 
-        # 경로와 화살표 그래픽 아이템을 저장할 변수
-        self.main_path_item = None
-        self.arrow_item = None
+        # 경로 그래픽 아이템을 저장할 변수
+        self.path_item = None
 
         # 맵 이미지 로딩 및 설정
         pixmap = QPixmap(map_path) 
@@ -107,51 +106,26 @@ class MapViewer(QGraphicsView):
         self._update_marker_pos(px, py, heading)
         self._cur_pos, self._cur_heading = QPointF(px, py), heading
 
-
-    def draw_path_with_arrow(self, main_path, arrow_segment):
+    def draw_path(self, path_points):
         """
-        경로의 본체와 마지막 화살표 부분을 나누어 그립니다.
+        주어진 좌표들을 따라 지도 위에 경로를 그립니다. (화살표 없음)
         """
-        # 1. 기존 경로와 화살표 아이템이 있다면 삭제
-        if self.main_path_item:
-            self.scene.removeItem(self.main_path_item)
-            self.main_path_item = None
-        if self.arrow_item:
-            self.scene.removeItem(self.arrow_item)
-            self.arrow_item = None
+        # 1. 기존 경로 아이템이 있다면 삭제
+        if self.path_item:
+            self.scene.removeItem(self.path_item)
+            self.path_item = None
         
-        # 2. 메인 경로(화살표 제외) 그리기
-        if main_path and len(main_path) > 0:
-            path = QPainterPath()
-            path.moveTo(main_path[0])
-            for point in main_path[1:]:
-                path.lineTo(point)
-            
-            pen = QPen(QColor("#3498db"), 8, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
-            self.main_path_item = self.scene.addPath(path, pen)
-            self.main_path_item.setZValue(10)
+        # 2. 그릴 경로가 없거나 점이 하나 뿐이면 여기서 종료
+        if not path_points or len(path_points) < 2:
+            return
+        
+        # 3. 새로운 경로 그리기
+        path = QPainterPath()
+        path.moveTo(path_points[0])
+        for point in path_points[1:]:
+            path.lineTo(point)
+        
+        pen = QPen(QColor("#3498db"), 8, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+        self.path_item = self.scene.addPath(path, pen)
+        self.path_item.setZValue(10)
 
-        # 3. 마지막 경로를 화살표로 그리기
-        if arrow_segment and len(arrow_segment) == 2:
-            start_point, end_point = arrow_segment[0], arrow_segment[1]
-            arrow_color = QColor("#3498db")
-            arrow_pen = QPen(arrow_color, 8, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
-            arrow_brush = QBrush(arrow_color)
-
-            # 화살촉(머리) 계산
-            angle = math.atan2(start_point.y() - end_point.y(), start_point.x() - end_point.x())
-            arrow_size = 15.0
-            arrow_p1 = end_point + QPointF(math.sin(angle + math.pi / 3) * arrow_size, 
-                                           math.cos(angle + math.pi / 3) * arrow_size)
-            arrow_p2 = end_point + QPointF(math.sin(angle + math.pi - math.pi / 3) * arrow_size,
-                                           math.cos(angle + math.pi - math.pi / 3) * arrow_size)
-            arrow_head = QPolygonF([end_point, arrow_p1, arrow_p2])
-            
-            # 화살표 선과 머리를 하나의 경로로 합치기
-            arrow_path = QPainterPath()
-            arrow_path.moveTo(start_point)
-            arrow_path.lineTo(end_point)
-            arrow_path.addPolygon(arrow_head) # 머리 추가
-
-            self.arrow_item = self.scene.addPath(arrow_path, arrow_pen, arrow_brush)
-            self.arrow_item.setZValue(11)
