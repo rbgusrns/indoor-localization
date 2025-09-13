@@ -2,9 +2,9 @@ import sys
 import serial
 import time
 import numpy as np
-import socket # UDP 통신을 위해 socket 모듈 임포트
+import socket
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QShortcut, QLabel
-from PyQt5.QtCore import QTimer, QMutex, Qt, QFile, QTextStream, QPointF
+from PyQt5.QtCore import QTimer, QMutex, Qt, QFile, QTextStream, QPointF, QThread, pyqtSignal
 from PyQt5.QtGui import QKeySequence
 
 # --- 모듈 임포트 ---
@@ -18,10 +18,38 @@ from event import SelectionDialog
 from bin import create_binary_map
 from Astar import find_path, create_distance_map
 
-# --- 초기 설정 값 ---
-INIT_X, INIT_Y = (0, 0)
-INIT_YAW = 180.0
+# --- UDP 수신을 위한 스레드 클래스 ---
+class UDPReceiverThread(QThread):
+    message_received = pyqtSignal(str)
 
+    def __init__(self, port, parent=None):
+        super().__init__(parent)
+        self.port = port
+        self.is_running = True
+
+    def run(self):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind(('0.0.0.0', self.port))
+        sock.settimeout(1.0)
+        print(f"UDP 수신 대기 시작 (포트: {self.port})")
+
+        while self.is_running:
+            try:
+                data, addr = sock.recvfrom(1024)
+                message = data.decode().strip()
+                if message:
+                    self.message_received.emit(message)
+            except socket.timeout:
+                continue
+        
+        sock.close()
+        print("UDP 수신 스레드 종료.")
+
+    def stop(self):
+        self.is_running = False
+
+# --- 메인 애플리케이션 클래스 ---
 class IndoorPositioningApp(QWidget):
     def __init__(self, config):
         super().__init__()
@@ -31,16 +59,19 @@ class IndoorPositioningApp(QWidget):
         self.rssi_mutex = QMutex()
         self.rssi_data = {}
         self.current_speed = 0.0
-        self.current_yaw = INIT_YAW
-        self.fused_pos = (INIT_X, INIT_Y)
+        self.current_yaw = 180.0
+        self.fused_pos = (0, 0)
         self.target_room = None
         self.last_start_grid = None
         self.BLOCK_SIZE = 10
 
-        self.udp_target_ip = self.config.get('udp_target_ip', "192.168.1.5")
-        self.udp_target_port = self.config.get('udp_target_port', 12345)
+        self.udp_target_ip = self.config.get('udp_target_ip', "192.168.0.141")
+        self.udp_target_port = self.config.get('udp_target_port', 5005)
         self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.udp_send_timer = QTimer(self)
+        
+        udp_listen_port = self.config.get('udp_listen_port', 5006)
+        self.udp_receiver = UDPReceiverThread(port=udp_listen_port)
 
         self._init_logic_components()
         self._init_ui()
@@ -50,50 +81,34 @@ class IndoorPositioningApp(QWidget):
     def _init_logic_components(self):
         self.binary_grid = create_binary_map(self.config['map_file'], block_size=self.BLOCK_SIZE)
         if self.binary_grid:
-            print("이진 지도 생성 완료.")
             self.distance_map, self.max_dist = create_distance_map(self.binary_grid)
-        else:
-            self.close()
-
+        else: self.close()
         self.ekf = EKF(self.config.get('ekf_dt', 1.0))
         self.fingerprint_db = FingerprintDB()
         self.fingerprint_db.load(self.config.get('fingerprint_db_path', 'fingerprint_db.json'))
         self.ble_scanner_thread = BLEScanThread(self.config)
-        
         try:
-            imu_port = self.config.get('imu_port', '/dev/ttyUSB0')
-            baudrate = self.config.get('imu_baudrate', 115200)
+            imu_port, baudrate = self.config.get('imu_port', '/dev/ttyUSB0'), self.config.get('imu_baudrate', 115200)
             self.serial_port = serial.Serial(imu_port, baudrate)
-            time.sleep(1)
-            self.serial_port.write(b'ZERO\n')
+            time.sleep(1); self.serial_port.write(b'ZERO\n')
             self.serial_reader = SerialReader(port=imu_port, baudrate=baudrate)
             self.serial_reader.start()
         except serial.SerialException as e:
-            print(f"시리얼 포트 오류: {e}.")
-            self.serial_reader = None
+            print(f"시리얼 포트 오류: {e}."); self.serial_reader = None
 
     def _init_ui(self):
-        self.toast_label = QLabel(self)
-        self.toast_label.setObjectName("Toast")
-        self.toast_label.setAlignment(Qt.AlignCenter)
-        self.toast_label.hide()
+        self.toast_label = QLabel(self); self.toast_label.setObjectName("Toast"); self.toast_label.setAlignment(Qt.AlignCenter); self.toast_label.hide()
+        self.robot_status_label = QLabel(self); self.robot_status_label.setObjectName("RobotStatus"); self.robot_status_label.setAlignment(Qt.AlignCenter); self.robot_status_label.hide()
+
         self.map_viewer = MapViewer(self.config['map_file'], self.config['px_per_m_x'], self.config['px_per_m_y'])
-        self.map_viewer._init_est_items(INIT_X, INIT_Y, INIT_YAW)
-        self.nav_btn = QPushButton("길안내")
-        self.nav_btn.setObjectName("NAV")
-        self.robot_btn = QPushButton("로봇\n호출")
-        self.robot_btn.setObjectName("Robot")
-        right_layout = QVBoxLayout()
-        right_layout.addWidget(self.nav_btn)
-        right_layout.addWidget(self.robot_btn)
-        main_layout = QHBoxLayout(self)
-        main_layout.addWidget(self.map_viewer)
-        main_layout.addLayout(right_layout)
-        self.setWindowTitle("ODIGA")
-        self.setFocusPolicy(Qt.StrongFocus)
-        self.load_stylesheet('stylesheet.qss')
-        self.showFullScreen()
-        self.setFocus()
+        self.map_viewer._init_est_items(0, 0, 180.0)
+        self.nav_btn = QPushButton("길안내"); self.nav_btn.setObjectName("NAV")
+        self.robot_btn = QPushButton("로봇\n호출"); self.robot_btn.setObjectName("Robot")
+
+        right_layout = QVBoxLayout(); right_layout.addWidget(self.nav_btn); right_layout.addWidget(self.robot_btn)
+        main_layout = QHBoxLayout(self); main_layout.addWidget(self.map_viewer); main_layout.addLayout(right_layout)
+        
+        self.setWindowTitle("ODIGA"); self.setFocusPolicy(Qt.StrongFocus); self.load_stylesheet('stylesheet.qss'); self.showFullScreen(); self.setFocus()
 
     def _connect_signals(self):
         self.ble_scanner_thread.detected.connect(self._on_ble_device_detected)
@@ -101,48 +116,37 @@ class IndoorPositioningApp(QWidget):
             self.serial_reader.heading_received.connect(self._on_yaw_update)
             self.serial_reader.speed_received.connect(self._on_speed_update)
         self.nav_btn.clicked.connect(self._show_selection_dialog)
+        self.robot_btn.clicked.connect(self._on_robot_call_clicked)
         shortcut = QShortcut(QKeySequence("G"), self)
         shortcut.activated.connect(self._start_ble_scan)
         self.udp_send_timer.timeout.connect(self._send_position_udp)
+        self.udp_receiver.message_received.connect(self._on_robot_message_received)
 
     def _start_timers(self):
-        self.rssi_clear_timer = QTimer(self)
-        self.rssi_clear_timer.timeout.connect(self._clear_rssi_cache)
-        self.rssi_clear_timer.start(2000)
-        self.udp_send_timer.start(1000)
+        self.rssi_clear_timer = QTimer(self); self.rssi_clear_timer.timeout.connect(self._clear_rssi_cache); self.rssi_clear_timer.start(2000)
+        self.udp_receiver.start()
 
     def _send_position_udp(self):
-        """현재 융합된 좌표(fused_pos)를 픽셀 단위로 변환하여 UDP로 전송합니다."""
-        # 1. 미터 단위 좌표 가져오기
-        pos_m = self.fused_pos
-
-        # 2. 픽셀로 변환
-        px = pos_m[0] * self.config['px_per_m_x']
-        py = pos_m[1] * self.config['px_per_m_y']
-
-        # 3. 메시지 형식 변경 (예: "px:1380,py:1000")
-        # 픽셀은 정수값이므로 int로 변환하여 전송
+        px = self.fused_pos[0] * self.config['px_per_m_x']
+        py = self.fused_pos[1] * self.config['px_per_m_y']
         message = f"px:{int(px)},py:{int(py)}"
-        
         self.udp_socket.sendto(message.encode(), (self.udp_target_ip, self.udp_target_port))
-        print(f"UDP Sent (pixels): {message} to {self.udp_target_ip}:{self.udp_target_port}")
+        print(f"UDP Sent: {message}")
 
     def _show_toast(self, message, duration=3000):
-        self.toast_label.setText(message)
-        self.toast_label.adjustSize()
-        self._update_toast_position()
-        self.toast_label.show()
-        self.toast_label.raise_()
+        self.toast_label.setText(message); self.toast_label.adjustSize()
+        self._update_toast_position(self.toast_label)
+        self.toast_label.show(); self.toast_label.raise_()
         QTimer.singleShot(duration, self.toast_label.hide)
 
-    def _update_toast_position(self):
-        x = (self.width() - self.toast_label.width()) / 2
-        y = 50
-        self.toast_label.move(int(x), int(y))
+    def _update_toast_position(self, label):
+        x = (self.width() - label.width()) / 2; y = 50
+        label.move(int(x), int(y))
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        self._update_toast_position()
+        self._update_toast_position(self.toast_label)
+        self._update_toast_position(self.robot_status_label)
 
     def _update_navigation_path(self):
         if not self.target_room: return
@@ -150,27 +154,15 @@ class IndoorPositioningApp(QWidget):
         start_grid, end_grid = self.meters_to_grid(start_m), self.meters_to_grid(end_m)
         if self.last_start_grid == start_grid: return
         self.last_start_grid = start_grid
-
-        penalty_strength = self.config.get('penalty_strength', 10.0)
-        path_grid = find_path(
-            self.binary_grid, start_grid, end_grid,
-            self.distance_map, self.max_dist, penalty_strength
-        )
-        if path_grid:
-            path_pixels = [self.grid_to_pixels(pos) for pos in path_grid]
-            self.map_viewer.draw_path(path_pixels)
-        else:
-            self.map_viewer.draw_path(None)
+        path_grid = find_path(self.binary_grid, start_grid, end_grid, self.distance_map, self.max_dist, self.config.get('penalty_strength', 10.0))
+        path_pixels = [self.grid_to_pixels(pos) for pos in path_grid] if path_grid else None
+        self.map_viewer.draw_path(path_pixels)
     
     def _on_ble_device_detected(self, rssi_vec):
-        self.rssi_mutex.lock()
-        self.rssi_data.update(rssi_vec)
-        local_rssi_copy = self.rssi_data.copy()
-        self.rssi_mutex.unlock()
+        self.rssi_mutex.lock(); self.rssi_data.update(rssi_vec); local_rssi_copy = self.rssi_data.copy(); self.rssi_mutex.unlock()
         if len(local_rssi_copy) >= 6:
             pts, _, _ = self.fingerprint_db.get_position(local_rssi_copy, k=self.config['k_neighbors'])
-            z = np.array([pts[0], pts[1]])
-            self.ekf.update(z)
+            self.ekf.update(np.array([pts[0], pts[1]]))
             self.fused_pos = self.ekf.get_state()[:2]
             self.map_viewer.mark_estimated_position(*self.fused_pos, self.current_yaw)
             self._update_navigation_path()
@@ -182,13 +174,10 @@ class IndoorPositioningApp(QWidget):
         self._update_navigation_path()
 
     def _on_yaw_update(self, yaw):
-        self.current_yaw = yaw
-        self.map_viewer.move_to(*self.fused_pos, self.current_yaw)
+        self.current_yaw = yaw; self.map_viewer.move_to(*self.fused_pos, self.current_yaw)
 
     def _clear_rssi_cache(self):
-        self.rssi_mutex.lock()
-        self.rssi_data.clear()
-        self.rssi_mutex.unlock()
+        self.rssi_mutex.lock(); self.rssi_data.clear(); self.rssi_mutex.unlock()
 
     def _show_selection_dialog(self):
         dialog = SelectionDialog(self)
@@ -196,39 +185,58 @@ class IndoorPositioningApp(QWidget):
             selected = dialog.selected_room
             self.target_room = self.room_coords[selected]
             self._show_toast(f"<b>{selected}</b>로 안내를 시작합니다.")
-            self.last_start_grid = None
-            self._update_navigation_path()
+            self.last_start_grid = None; self._update_navigation_path()
         else:
             self._show_toast("안내를 취소했습니다.", duration=2000)
-            self.target_room = None
-            self.map_viewer.draw_path(None)
+            self.target_room = None; self.map_viewer.draw_path(None)
             
     def _start_ble_scan(self):
-        if not self.ble_scanner_thread.isRunning():
-            self.ble_scanner_thread.start()
-            print("BLE Scan Started.")
+        if not self.ble_scanner_thread.isRunning(): self.ble_scanner_thread.start(); print("BLE Scan Started.")
     
-    def load_stylesheet(self, filename):
-        qss_file = QFile(filename)
-        if qss_file.open(QFile.ReadOnly | QFile.Text):
-            self.setStyleSheet(QTextStream(qss_file).readAll())
+    def _on_robot_call_clicked(self):
+        if not self.udp_send_timer.isActive():
+            self.udp_send_timer.start(1000)
+            self.robot_status_label.setText("로봇이 오고 있습니다..."); self.robot_status_label.adjustSize()
+            self._update_toast_position(self.robot_status_label)
+            self.robot_status_label.show(); self.robot_status_label.raise_()
+            self._show_toast("로봇을 호출했습니다.")
         else:
-            print(f"'{filename}' 스타일시트 로드 실패!")
+            self._show_toast("이미 로봇이 호출되었습니다.")
+
+    def _on_robot_message_received(self, message):
+        """로봇으로부터 UDP 메시지를 수신했을 때 실행될 슬롯."""
+        print(f"로봇으로부터 메시지 수신: '{message}'")
+        if message == "1":
+            # 1. 로봇 상태 알림창 숨기기
+            self.robot_status_label.hide()
+            # 2. UDP 좌표 전송 중지 (로봇이 도착했으므로 더 보낼 필요 없음)
+            self.udp_send_timer.stop()
+            # 3. "로봇이 도착했습니다" 토스트 알림 표시
+            self._show_toast("로봇이 도착했습니다.")
+
+    def load_stylesheet(self, filename):
+        qss_file = QFile(filename);
+        if qss_file.open(QFile.ReadOnly | QFile.Text): self.setStyleSheet(QTextStream(qss_file).readAll())
+        else: print(f"'{filename}' 스타일시트 로드 실패!")
 
     def meters_to_grid(self, pos_m):
-        row = int(pos_m[1] * self.config['px_per_m_y'] / self.BLOCK_SIZE)
-        col = int(pos_m[0] * self.config['px_per_m_x'] / self.BLOCK_SIZE)
+        row = int(pos_m[1] * self.config['px_per_m_y'] / self.BLOCK_SIZE); col = int(pos_m[0] * self.config['px_per_m_x'] / self.BLOCK_SIZE)
         return (row, col)
 
     def grid_to_pixels(self, pos_grid):
-        px = pos_grid[1] * self.BLOCK_SIZE + self.BLOCK_SIZE / 2
-        py = pos_grid[0] * self.BLOCK_SIZE + self.BLOCK_SIZE / 2
+        px = pos_grid[1] * self.BLOCK_SIZE + self.BLOCK_SIZE / 2; py = pos_grid[0] * self.BLOCK_SIZE + self.BLOCK_SIZE / 2
         return QPointF(px, py)
+
+    def closeEvent(self, event):
+        """애플리케이션 종료 시 스레드들을 안전하게 종료합니다."""
+        self.udp_receiver.stop()
+        self.ble_scanner_thread.stop()
+        if self.serial_reader: self.serial_reader.stop()
+        super().closeEvent(event)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     config = load_config()
     main_window = IndoorPositioningApp(config)
-    main_window.show()
     sys.exit(app.exec_())
 
