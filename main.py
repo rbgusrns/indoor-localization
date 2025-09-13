@@ -1,5 +1,5 @@
 import sys
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QShortcut
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout,QPushButton, QShortcut
 from PyQt5.QtCore import QTimer, QMutex, Qt
 from PyQt5.QtGui     import QKeySequence
 from app_config import load_config
@@ -118,7 +118,7 @@ if __name__ == "__main__":
 
     # PyQt 앱 구성
     app = QApplication(sys.argv) #어플리케이션 엔진 생성 sys.argv는 실행 옵션이며, 터미널에서 넘긴 인자를 저장
-    widget = QWidget() # 빈 창을 생성.
+    widget = QWidget() # 모든 것을 담을 빈 상자 생성.
     mv = MapViewer(cfg['map_file'], cfg['px_per_m_x'], cfg['px_per_m_y']) #맵 뷰어 객체 생성
     mv._init_est_items(INIT_X, INIT_Y,INIT_YAW) # 초기 위치
     #mv.update_heading(INIT_YAW)
@@ -129,23 +129,27 @@ if __name__ == "__main__":
         vec, mv, fp, ekf, cfg['k_neighbors'],
         on_detect.speed, on_detect.yaw
     ))
-    '''
-    # UI 버튼 설정
-    start_btn = QPushButton("Start Scan")
-    stop_btn  = QPushButton("Stop Scan")
-    start_btn.clicked.connect(thread.start) # scan_loop 시작! .start: 내부적으로 run 호출
-    stop_btn.clicked.connect(thread.stop)
 
-    # 레이아웃 구성
-    layout = QVBoxLayout(widget) #위젯 위에 수직 레이아웃(구역) 생성.    
-    layout.addWidget(start_btn)
-    layout.addWidget(stop_btn)
-    widget.setLayout(layout) #위젯에 레이아웃 적용.
-    '''
-    layout = QVBoxLayout(widget)
+
+    nav_btn = QPushButton("NAV")
     
-    layout.addWidget(mv)
-    widget.setLayout(layout) #위젯에 레이아웃 적용.
+    robot_btn = QPushButton("Robot")
+
+    main_layout = QHBoxLayout()
+    right_layout = QVBoxLayout()
+
+    right_layout.addWidget(nav_btn)
+    right_layout.addWidget(robot_btn)
+    
+    main_layout.addWidget(mv)
+    main_layout.addLayout(right_layout)
+
+    widget.setLayout(main_layout)
+
+    #layout = QVBoxLayout(widget)
+    
+    #layout.addWidget(mv)
+    #widget.setLayout(layout) #위젯에 레이아웃 적용.
     widget.setFocusPolicy(Qt.StrongFocus) #위젯이 포커스를 받을 자격을 준다. 포커스 = 마우스로 클릭했을 때 그 상황. 
     widget.show() #버튼 두개와 맵을 담은 위젯을 보여줌.
     widget.showFullScreen()
