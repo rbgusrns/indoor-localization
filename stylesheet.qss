@@ -37,11 +37,12 @@ QPushButton:hover {
 }
 
 #RobotStatus {
-background-color: rgba(46, 204, 113, 220); / 초록색 반투명 배경 */
+background-color: #2ecc71; / 단색 배경 /
 color: white;
-font-size: 28px;
+font-size: 30px;
 font-weight: bold;
-padding: 15px 30px;
-border-radius: 25px;
-border: 2px solid rgba(255, 255, 255, 90);
+padding: 18px 35px;
+border-radius: 30px;
+/ 테두리는 그림자 효과를 위해 제거하거나 얇게 설정 */
+border: 1px solid rgba(255, 255, 255, 90);
 }
