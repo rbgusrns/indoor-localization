@@ -2,7 +2,7 @@
 
 
 
-QWidget { background-color: #a0a0a0ff; }
+QWidget { background-color: #a0a0a0; }
 
 QPushButton {
 
