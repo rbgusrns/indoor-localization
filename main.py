@@ -16,6 +16,7 @@ from serial_reader import SerialReader
 from event import SelectionDialog
 from bin import create_binary_map
 from Astar import find_path, create_distance_map
+import socket
 
 # --- 초기 설정 값 ---
 INIT_X, INIT_Y = (0, 0)
@@ -24,6 +25,14 @@ INIT_YAW = 180.0
 class IndoorPositioningApp(QWidget):
     def __init__(self, config):
         super().__init__()
+
+        # 데이터를 보낼 대상 장치(로봇 등)의 IP 주소와 포트 번호
+        self.udp_target_ip = self.config.get('udp_target_ip', "192.168.0.141") # 예시 IP
+        self.udp_target_port = self.config.get('udp_target_port', 5005)
+        
+        # UDP 소켓 생성
+        self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
         self.config = config
         self.room_coords = {room['name']: (room['x'], room['y']) for room in config['rooms']}
         
@@ -40,6 +49,15 @@ class IndoorPositioningApp(QWidget):
         self._init_ui()
         self._connect_signals()
         self._start_timers()
+
+    def _send_position_udp(self):
+        """현재 융합된 좌표(fused_pos)를 UDP로 전송합니다."""
+        # 전송할 메시지 생성 (예: "x:10.5,y:20.3")
+        message = f"x:{self.fused_pos[0]:.2f},y:{self.fused_pos[1]:.2f}"
+        
+        # 메시지를 바이트로 인코딩하여 전송
+        self.udp_socket.sendto(message.encode(), (self.udp_target_ip, self.udp_target_port))
+        print(f"UDP Sent: {message}") # 디버깅용
 
     def _init_logic_components(self):
         self.binary_grid = create_binary_map(self.config['map_file'], block_size=self.BLOCK_SIZE)
@@ -157,12 +175,14 @@ class IndoorPositioningApp(QWidget):
             self.fused_pos = self.ekf.get_state()[:2]
             self.map_viewer.mark_estimated_position(*self.fused_pos, self.current_yaw)
             self._update_navigation_path()
+            self._send_position_udp()
 
     def _on_speed_update(self, speed):
         self.current_speed = speed
         self.ekf.predict(self.current_yaw, self.current_speed)
         self.fused_pos = self.ekf.get_state()[:2]
         self._update_navigation_path()
+        self._send_position_udp()
 
     def _on_yaw_update(self, yaw):
         self.current_yaw = yaw
