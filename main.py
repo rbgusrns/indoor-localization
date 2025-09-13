@@ -26,6 +26,9 @@ class IndoorPositioningApp(QWidget):
     def __init__(self, config):
         super().__init__()
 
+        self.config = config
+        self.room_coords = {room['name']: (room['x'], room['y']) for room in config['rooms']}
+
         # 데이터를 보낼 대상 장치(로봇 등)의 IP 주소와 포트 번호
         self.udp_target_ip = self.config.get('udp_target_ip', "192.168.0.141") # 예시 IP
         self.udp_target_port = self.config.get('udp_target_port', 5005)
@@ -33,9 +36,6 @@ class IndoorPositioningApp(QWidget):
         # UDP 소켓 생성
         self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-        self.config = config
-        self.room_coords = {room['name']: (room['x'], room['y']) for room in config['rooms']}
-        
         self.rssi_mutex = QMutex()
         self.rssi_data = {}
         self.current_speed = 0.0
