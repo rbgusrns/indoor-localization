@@ -11,6 +11,7 @@ import numpy as np
 from serial_reader import SerialReader
 import serial
 import time
+from event import SelectionDialog
 # RSSI 보호용 뮤텍스
 rssi_mutex = QMutex()
 #mutex: 한번에 하나의 스레드만 이 자원에 접근할 수 있도록 함
@@ -90,7 +91,23 @@ on_detect.rssi = {}
 on_detect.speed = 0.0
 on_detect.yaw = 0
 
+# '진료실 선택하기' 버튼이 눌렸을 때 실행될 슬롯(메서드)
+def show_selection_dialog(self):
+    # SelectionDialog 인스턴스 생성
+    dialog = SelectionDialog(self)
 
+    # exec()는 다이얼로그가 닫힐 때까지 코드 실행을 멈춤
+    # 사용자가 선택을 완료하면 result에 QDialog.Accepted(값: 1) 또는 QDialog.Rejected(값: 0)가 담김
+    result = dialog.exec()
+
+    # 만약 사용자가 진료실을 선택했다면(dialog.accept()가 호출되었다면)
+    if result:
+        selected = dialog.selected_room
+        self.result_label.setText(f"'{selected}'을(를) 선택하셨습니다.")
+        print(f"선택된 진료실: {selected}")
+    else:
+        self.result_label.setText("진료실 선택을 취소했습니다.")
+        print("선택이 취소되었습니다.")
 
 def load_stylesheet(widget, filename):
     """
@@ -144,7 +161,7 @@ if __name__ == "__main__":
 
     nav_btn = QPushButton("길안내")
     nav_btn.setObjectName("NAV")
-
+    nav_btn.clicked.connect(show_selection_dialog)
     robot_btn = QPushButton("로봇\n호출")
     robot_btn.setObjectName("Robot")
     main_layout = QHBoxLayout()
