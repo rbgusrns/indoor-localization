@@ -1,35 +1,41 @@
 /* stylesheet.qss */
 
-QWidget {
-background-color: #a0a0a0;
-}
+
+
+QWidget { background-color: #a0a0a0; }
 
 QPushButton {
-width: 180px;
-height: 200px;
-background-color: #ff8800;
-border-radius: 2px;
-border: 1px solid #000000;
-color: white;
-text-align: center;
-font-family: 'Malgun Gothic', 'Arial', sans-serif;
-font-size: 50px;
-font-weight: bold;
-margin: 4px 2px;
+
+    width: 180px;
+    height: 200px;
+
+    background-color: #ff8800; /* Green */
+    border-radius: 2px;
+    border: 1px solid #000000;
+    color: white;
+
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-family: 'Malgun Gothic', 'Arial', sans-serif;
+    font-size: 50px;
+    font-weight: bold;
+    margin: 4px 2px;
+    transition-duration: 0.4s;
+    cursor: pointer;
 }
 
 QPushButton:hover {
-background-color: white;
-color: black;
-border: 2px solid #ff8800;
+    background-color: white;
+    color: black;
+    border: 2px solid #ff8800;
 }
 
-/* Toast Notification Style /
 #Toast {
-background-color: rgba(0, 0, 0, 200); / 검은색 반투명 배경 /
-color: white; / 흰색 글씨 /
-font-size: 28px; / 글씨 크기 /
-padding: 15px 30px; / 안쪽 여백 (상하, 좌우) */
-border
-
+    background-color: rgba(0, 0, 0, 200); /* 검은색 반투명 배경 */
+    color: white; /* 흰색 글씨 */
+    font-size: 28px; /* 글씨 크기 */
+    padding: 15px 30px; /* 안쪽 여백 (상하, 좌우) */
+    border-radius: 25px; /* 모서리를 더 둥글게 */
+    border: 2px solid rgba(255, 255, 255, 50); /* 은은한 흰색 테두리 */
 }
