@@ -38,6 +38,7 @@ class UDPReceiverThread(QThread):
         sock.close()
     def stop(self): self.is_running = False
 
+
 # --- 메인 애플리케이션 클래스 ---
 class IndoorPositioningApp(QWidget):
     def __init__(self, config):
