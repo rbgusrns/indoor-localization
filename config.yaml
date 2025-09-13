@@ -1,12 +1,12 @@
 # 설정 변수들 저장 파일.
 
- px_per_m_x: 20
- px_per_m_y: 20
- scan_interval: 0.2
- filter_window: 5
- k_neighbors: 3
- map_file: "map.png"
- 
+px_per_m_x: 20
+px_per_m_y: 20
+scan_interval: 0.2
+filter_window: 5
+k_neighbors: 3
+map_file: "map.png"
+
 rooms:
   - name: 101호
     x: 24.05  # 481 / 20
@@ -17,10 +17,11 @@ rooms:
   - name: 103호
     x: 14.5   # 290 / 20
     y: 5.5    # 110 / 20
- beacon_macs:
-   - "C3:00:00:44:DC:1A"
-   - "C3:00:00:44:DC:1B"
-   - "C3:00:00:44:DC:1C"
-   - "C3:00:00:44:DC:1D"
-   - "C3:00:00:44:DC:1E"
-   - "C3:00:00:44:DC:1F"
+
+beacon_macs:
+  - "C3:00:00:44:DC:1A"
+  - "C3:00:00:44:DC:1B"
+  - "C3:00:00:44:DC:1C"
+  - "C3:00:00:44:DC:1D"
+  - "C3:00:00:44:DC:1E"
+  - "C3:00:00:44:DC:1F"
