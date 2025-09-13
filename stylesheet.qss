@@ -45,3 +45,23 @@ QPushButton:hover {
     border-radius: 30px;
     border: 1px solid rgba(255, 255, 255, 90);
 }
+
+#StopCallButton {
+background-color: #e74c3c; /* 빨간색 계열 */
+color: white;
+font-size: 22px;
+font-weight: bold;
+padding: 10px 20px;
+border-radius: 20px;
+border: none;
+/* 버튼 크기 관련 속성 제거하여 자동으로 조절되도록 함 */
+width: auto;
+height: auto;
+margin: 0px;
+}
+#StopCallButton:hover {
+background-color: #c0392b;
+}
+#StopCallButton:pressed {
+background-color: #a93226;
+}
