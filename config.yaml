@@ -6,7 +6,6 @@
  filter_window: 5
  k_neighbors: 3
  map_file: "map.png"
- room1: 
 rooms:
   - name: 101호
     x: 481
