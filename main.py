@@ -67,14 +67,22 @@ class IndoorPositioningApp(QWidget):
             self.serial_reader = None
 
     def _init_ui(self):
-        # --- 1. 토스트 알림 라벨 생성 ---
-        # 레이아웃에 추가하지 않고, 부모 위젯(self)만 지정하여 화면 위에 떠 있도록 함
         self.toast_label = QLabel(self)
         self.toast_label.setObjectName("Toast")
         self.toast_label.setAlignment(Qt.AlignCenter)
-        self.toast_label.hide() # 처음에는 숨김
+        
+        # --- ▼ 디버깅 코드 1: 임시 스타일 직접 적용 ▼ ---
+        # QSS 파일이 로드되지 않더라도 보이도록 강제 스타일을 입힙니다.
+        # 만약 이 스타일로 보인다면, stylesheet.qss 파일 경로 문제일 수 있습니다.
+        self.toast_label.setStyleSheet("""
+            background-color: rgba(200, 0, 0, 200); 
+            color: white;
+            font-size: 28px;
+            padding: 15px 30px;
+            border-radius: 25px;
+        """)
+        self.toast_label.hide()
 
-        # 지도 뷰어 및 버튼 생성
         self.map_viewer = MapViewer(self.config['map_file'], self.config['px_per_m_x'], self.config['px_per_m_y'])
         self.map_viewer._init_est_items(INIT_X, INIT_Y, INIT_YAW)
         self.nav_btn = QPushButton("길안내")
@@ -82,7 +90,6 @@ class IndoorPositioningApp(QWidget):
         self.robot_btn = QPushButton("로봇\n호출")
         self.robot_btn.setObjectName("Robot")
 
-        # 레이아웃 설정
         right_layout = QVBoxLayout()
         right_layout.addWidget(self.nav_btn)
         right_layout.addWidget(self.robot_btn)
@@ -97,7 +104,6 @@ class IndoorPositioningApp(QWidget):
         self.setFocus()
 
     def _connect_signals(self):
-        # ... (이전과 동일)
         self.ble_scanner_thread.detected.connect(self._on_ble_device_detected)
         if self.serial_reader:
             self.serial_reader.heading_received.connect(self._on_yaw_update)
@@ -107,34 +113,34 @@ class IndoorPositioningApp(QWidget):
         shortcut.activated.connect(self._start_ble_scan)
 
     def _start_timers(self):
-        # ... (이전과 동일)
         self.rssi_clear_timer = QTimer(self)
         self.rssi_clear_timer.timeout.connect(self._clear_rssi_cache)
         self.rssi_clear_timer.start(2000)
 
-    # --- 토스트 알림 관련 메서드 ---
     def _show_toast(self, message, duration=3000):
-        """화면 중앙 상단에 메시지를 일정 시간 동안 표시합니다."""
+        print("--- _show_toast 호출됨 ---") # 디버깅 메시지
         self.toast_label.setText(message)
-        self.toast_label.adjustSize() # 텍스트 크기에 맞게 라벨 크기 조절
-        self._update_toast_position() # 중앙에 위치시키기
+        self.toast_label.adjustSize()
+        self._update_toast_position()
         self.toast_label.show()
-        # duration 밀리초 후에 자동으로 hide 함수를 실행
+        
+        # --- ▼ 디버깅 코드 2: 좌표 및 크기 정보 출력 ▼ ---
+        geo = self.toast_label.geometry()
+        print(f"토스트 알림 표시: '{message}'")
+        print(f"  - 위치 (x, y): ({geo.x()}, {geo.y()})")
+        print(f"  - 크기 (w, h): ({geo.width()}, {geo.height()})")
+        
         QTimer.singleShot(duration, self.toast_label.hide)
 
     def _update_toast_position(self):
-        """토스트 알림을 창의 중앙 상단에 위치시킵니다."""
-        # 창 가로 중앙, 상단에서 50px 아래에 위치
         x = (self.width() - self.toast_label.width()) / 2
         y = 50
         self.toast_label.move(int(x), int(y))
 
     def resizeEvent(self, event):
-        """창 크기가 변경될 때마다 토스트 알림의 위치를 다시 계산합니다."""
         super().resizeEvent(event)
         self._update_toast_position()
 
-    # --- 경로 및 위치 업데이트 로직 (이전과 동일) ---
     def _update_navigation_path(self):
         if not self.target_room: return
         start_m, end_m = self.fused_pos, self.target_room
@@ -153,7 +159,6 @@ class IndoorPositioningApp(QWidget):
         else:
             self.map_viewer.draw_path(None)
     
-    # ... (_on_ble_device_detected, _on_speed_update 등 나머지 함수는 이전과 동일)
     def _on_ble_device_detected(self, rssi_vec):
         self.rssi_mutex.lock()
         self.rssi_data.update(rssi_vec)
@@ -183,19 +188,14 @@ class IndoorPositioningApp(QWidget):
         self.rssi_mutex.unlock()
 
     def _show_selection_dialog(self):
-        """'길안내' 버튼 클릭 시 토스트 알림을 통해 상태를 표시합니다."""
         dialog = SelectionDialog(self)
         if dialog.exec():
             selected = dialog.selected_room
             self.target_room = self.room_coords[selected]
-            
-            # --- 2. 토스트 알림 표시 ---
             self._show_toast(f"<b>{selected}</b>로 안내를 시작합니다.")
-            
             self.last_start_grid = None
             self._update_navigation_path()
         else:
-            # --- 3. 취소 시 토스트 알림 표시 및 경로 삭제 ---
             self._show_toast("안내를 취소했습니다.", duration=2000)
             self.target_room = None
             self.map_viewer.draw_path(None)
@@ -205,12 +205,14 @@ class IndoorPositioningApp(QWidget):
             self.ble_scanner_thread.start()
             print("BLE Scan Started.")
     
-    # ... (load_stylesheet, meters_to_grid, grid_to_pixels는 이전과 동일)
     def load_stylesheet(self, filename):
         qss_file = QFile(filename)
         if qss_file.open(QFile.ReadOnly | QFile.Text):
             self.setStyleSheet(QTextStream(qss_file).readAll())
+            print(f"'{filename}' 스타일시트 로드 성공.") # 로드 성공 메시지 추가
             qss_file.close()
+        else:
+            print(f"'{filename}' 스타일시트 로드 실패!") # 로드 실패 메시지 추가
 
     def meters_to_grid(self, pos_m):
         row = int(pos_m[1] * self.config['px_per_m_y'] / self.BLOCK_SIZE)
@@ -221,7 +223,6 @@ class IndoorPositioningApp(QWidget):
         px = pos_grid[1] * self.BLOCK_SIZE + self.BLOCK_SIZE / 2
         py = pos_grid[0] * self.BLOCK_SIZE + self.BLOCK_SIZE / 2
         return QPointF(px, py)
-
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
