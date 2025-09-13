@@ -3,7 +3,7 @@ import serial
 import time
 import numpy as np
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QShortcut
-from PyQt5.QtCore import QTimer, QMutex, Qt, QFile, QTextStream
+from PyQt5.QtCore import QTimer, QMutex, Qt, QFile, QTextStream, QPointF
 from PyQt5.QtGui import QKeySequence
 
 # 아래 모듈들은 실제 파일이 존재해야 합니다.
@@ -14,6 +14,8 @@ from ble_scanner import BLEScanThread
 from map_viewer import MapViewer
 from serial_reader import SerialReader
 from event import SelectionDialog
+from bin import create_binary_map
+from Astar import find_path
 
 # --- 초기 설정 값 ---
 # INIT_X, INIT_Y = (36.5, 28)
@@ -23,11 +25,13 @@ INIT_YAW = 180.0
 class IndoorPositioningApp(QWidget):
     """
     실내 측위 시스템의 메인 애플리케이션 클래스.
-    UI, 데이터 처리, 상태 관리를 모두 캡슐화합니다.
+    UI, 데이터 처리, 상태 관리를 모두 캡슐화
     """
     def __init__(self, config):
         super().__init__()
         self.config = config
+
+        self.room_coords = {room['name']: (room['x'], room['y']) for room in config['rooms']}
         
         # --- 상태 변수 및 동기화 객체 초기화 ---
         self.rssi_mutex = QMutex()
@@ -35,6 +39,8 @@ class IndoorPositioningApp(QWidget):
         self.current_speed = 0.0
         self.current_yaw = INIT_YAW
         self.fused_pos = (INIT_X, INIT_Y)
+
+        self.BLOCK_SIZE = 10
 
         # --- 핵심 로직 컴포넌트 초기화 ---
         self._init_logic_components()
@@ -50,6 +56,13 @@ class IndoorPositioningApp(QWidget):
 
     def _init_logic_components(self):
         """핵심 로직(EKF, Fingerprint DB, 스캐너 등) 객체들을 생성합니다."""
+
+        self.binary_grid = create_binary_map(self.config['map_file'], block_size=self.BLOCK_SIZE)
+        if self.binary_grid:
+            print("이진 지도 생성 완료.")
+        else:
+            print("오류: 이진 지도 생성에 실패했습니다.")
+
         self.ekf = EKF(self.config.get('ekf_dt', 1.0))
         
         self.fingerprint_db = FingerprintDB()
@@ -137,7 +150,7 @@ class IndoorPositioningApp(QWidget):
             # 3. 융합 결과 획득 및 UI 업데이트
             self.fused_pos = self.ekf.get_state()[:2]
             self.map_viewer.update_debug(local_rssi_copy, self.fused_pos, np.array(dists))
-            self.map_viewer.mark_estimated_position(*self.fused_pos, self.current_yaw)
+            self.map_viewer.mark_estimated_position(*self.fused_pos, self.current_yaw) #현재 좌표와 방향을 맵에 출력함. *은 언패킹 연산자.
 
     def _on_speed_update(self, speed):
         """속도 정보가 수신되었을 때 호출되는 슬롯."""
@@ -166,6 +179,30 @@ class IndoorPositioningApp(QWidget):
             selected = dialog.selected_room
             # self.result_label.setText(f"'{selected}'을(를) 선택하셨습니다.") # result_label이 없으므로 주석 처리
             print(f"선택된 진료실: {selected}")
+            self.target_room = self.room_coords[selected] #선택한 진료실의 좌표 튜플을 얻음. 
+            print(f"'{selected}' 길안내 시작. 목표 좌표(m): {self.target_room}")
+            # 1. 시작점과 도착점 좌표를 그리드 좌표로 변환
+            start_m = self.fused_pos
+            end_m = self.target_room
+            
+            start_grid = self.meters_to_grid(start_m)
+            end_grid = self.meters_to_grid(end_m)
+            
+            print(f"경로 탐색 시작: {start_grid} -> {end_grid}")
+
+            # 2. A* 알고리즘으로 경로 탐색
+            path_grid = find_path(self.binary_grid, start_grid, end_grid)
+
+            # 3. 결과를 픽셀 좌표로 변환하여 지도에 그리기
+            if path_grid:
+                print(f"경로를 찾았습니다. (총 {len(path_grid)} 단계)")
+                path_pixels = [self.grid_to_pixels(pos) for pos in path_grid]
+                self.map_viewer.draw_path(path_pixels)
+            else:
+                print("경로 탐색에 실패했습니다.")
+                self.map_viewer.draw_path(None) # 실패 시 기존 경로 삭제
+                
+
         else:
             # self.result_label.setText("진료실 선택을 취소했습니다.")
             print("선택이 취소되었습니다.")
@@ -183,6 +220,18 @@ class IndoorPositioningApp(QWidget):
             qss_stream = QTextStream(qss_file)
             self.setStyleSheet(qss_stream.readAll())
             qss_file.close()
+
+    def meters_to_grid(self, pos_m):
+        """미터 단위 좌표를 그리드 좌표(행, 열)로 변환합니다."""
+        row = int(pos_m[1] * self.config['px_per_m_y'] / self.BLOCK_SIZE)
+        col = int(pos_m[0] * self.config['px_per_m_x'] / self.BLOCK_SIZE)
+        return (row, col)
+
+    def grid_to_pixels(self, pos_grid):
+        """그리드 좌표(행, 열)를 픽셀 좌표(QPointF)로 변환합니다."""
+        px = pos_grid[1] * self.BLOCK_SIZE + self.BLOCK_SIZE / 2
+        py = pos_grid[0] * self.BLOCK_SIZE + self.BLOCK_SIZE / 2
+        return QPointF(px, py)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

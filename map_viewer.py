@@ -1,5 +1,5 @@
-from PyQt5.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsTextItem, QGraphicsEllipseItem, QGraphicsPixmapItem, QGraphicsPolygonItem
-from PyQt5.QtGui import QPainter, QPen, QBrush, QPixmap, QPolygonF, QTransform
+from PyQt5.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsTextItem, QGraphicsEllipseItem, QGraphicsPixmapItem, QGraphicsPolygonItem, QGraphicsLineItem
+from PyQt5.QtGui import QPainter, QPen, QBrush, QPixmap, QPolygonF, QTransform, QColor
 from PyQt5.QtCore import Qt, QRectF, QPointF, QTimer
 import math
 
@@ -14,6 +14,8 @@ class MapViewer(QGraphicsView):
         # 실제세계 -> 픽셀 변환 비율. 미터당 픽셀.
         self.scene = QGraphicsScene() # 씬 객체 생성
         self.setScene(self.scene) # 앞으로 이 씬에서 작업을 하겠다.
+
+        self.path_items = [] # 경로를 그리는 그래픽 아이템들을 저장할 리스트
 
         # 맵 이미지 로딩
         pixmap = QPixmap(map_path) 
@@ -109,3 +111,28 @@ class MapViewer(QGraphicsView):
         self._cur_pos = end_pos
         print(self._cur_pos)
         self._cur_heading = (start_h + delta_h) % 360
+
+        def draw_path(self, path_points):
+
+            # 1. 기존에 그려진 경로가 있다면 삭제
+            for item in self.path_items:
+                self.scene.removeItem(item)
+            self.path_items.clear()
+
+            if not path_points or len(path_points) < 2:
+                return
+
+            # 2. 새로운 경로를 그릴 펜 설정 (빨간색, 두께 3)
+            pen = QPen(QColor(255, 0, 0, 200), 3) # (R, G, B, 투명도)
+            pen.setCapStyle(Qt.RoundCap)
+            pen.setJoinStyle(Qt.RoundJoin)
+
+            # 3. 경로의 각 지점을 선으로 연결
+            for i in range(len(path_points) - 1):
+                p1 = path_points[i]
+                p2 = path_points[i+1]
+                line = QGraphicsLineItem(p1.x(), p1.y(), p2.x(), p2.y())
+                line.setPen(pen)
+                line.setZValue(10)  # 마커(20)보다는 아래, 지도(0)보다는 위에 표시
+                self.scene.addItem(line)
+                self.path_items.append(line) # 삭제를 위해 리스트에 추가
