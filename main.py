@@ -78,7 +78,8 @@ def yaw_callback(yaw):
 # INIT_X,INIT_Y = (1306,978) 픽셀
 #INIT_X,INIT_Y = (37.5,37.5) -> 681,668
 #INIT_X,INIT_Y = (71.93,54.91) -> (909,668)
-INIT_X,INIT_Y = (36.5,28)
+#INIT_X,INIT_Y = (36.5,28)
+INIT_X,INIT_Y = (0,0)
 INIT_YAW = 180.0
 # 초기 위치 설정
 

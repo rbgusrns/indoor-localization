@@ -1,9 +1,9 @@
- px_per_m_x: 35.2
- px_per_m_y: 35.2
+ px_per_m_x: 20
+ px_per_m_y: 20
  scan_interval: 0.2
  filter_window: 5
  k_neighbors: 3
- map_file: "Haedang.png"
+ map_file: "2GONG.png"
  beacon_macs:
    - "C3:00:00:44:DC:1A"
    - "C3:00:00:44:DC:1B"
