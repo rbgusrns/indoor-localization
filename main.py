@@ -58,6 +58,10 @@ class IndoorPositioningApp(QWidget):
         """핵심 로직(EKF, Fingerprint DB, 스캐너 등) 객체들을 생성합니다."""
 
         self.binary_grid = create_binary_map(self.config['map_file'], block_size=self.BLOCK_SIZE)
+
+        from Astar import create_distance_map 
+        self.distance_map, self.max_dist = create_distance_map(self.binary_grid)
+
         if self.binary_grid:
             print("이진 지도 생성 완료.")
         else:
@@ -190,8 +194,15 @@ class IndoorPositioningApp(QWidget):
             
             print(f"경로 탐색 시작: {start_grid} -> {end_grid}")
 
-            # 2. A* 알고리즘으로 경로 탐색
-            path_grid = find_path(self.binary_grid, start_grid, end_grid)
+            penalty_strength = 10.0 # 설정 파일에서 읽어오는 것을 추천
+            path_grid = find_path(
+                self.binary_grid, 
+                start_grid, 
+                end_grid,
+                self.distance_map, # 전달
+                self.max_dist,     # 전달
+                penalty_strength   # 전달
+            )
 
             # 3. 결과를 픽셀 좌표로 변환하여 지도에 그리기
             if path_grid:
