@@ -68,14 +68,13 @@ class IndoorPositioningApp(QWidget):
     def _init_ui(self):
         self.toast_label = QLabel(self); self.toast_label.setObjectName("Toast"); self.toast_label.setAlignment(Qt.AlignCenter); self.toast_label.hide()
         
-        # --- ▼ 1. 로봇 상태창을 QWidget 컨테이너로 변경 ▼ ---
         self.robot_status_widget = QWidget(self)
         self.robot_status_widget.setObjectName("RobotStatus")
         self.robot_status_widget.hide()
 
         status_layout = QHBoxLayout(self.robot_status_widget)
-        status_layout.setContentsMargins(25, 10, 25, 10) # 내부 여백
-        status_layout.setSpacing(20) # 텍스트와 버튼 사이 간격
+        status_layout.setContentsMargins(25, 10, 25, 10)
+        status_layout.setSpacing(20)
 
         status_text = QLabel("로봇이 오고 있습니다...")
         self.stop_call_btn = QPushButton("호출 중지")
@@ -104,7 +103,7 @@ class IndoorPositioningApp(QWidget):
             self.serial_reader.speed_received.connect(self._on_speed_update)
         self.nav_btn.clicked.connect(self._show_selection_dialog)
         self.robot_btn.clicked.connect(self._on_robot_call_clicked)
-        self.stop_call_btn.clicked.connect(self._on_robot_call_stop_clicked) # --- ▼ 2. 호출 중지 버튼 시그널 연결 ▼ ---
+        self.stop_call_btn.clicked.connect(self._on_robot_call_stop_clicked)
         shortcut = QShortcut(QKeySequence("G"), self); shortcut.activated.connect(self._start_ble_scan)
         self.udp_send_timer.timeout.connect(self._send_position_udp)
         self.udp_receiver.message_received.connect(self._on_robot_message_received)
@@ -177,21 +176,22 @@ class IndoorPositioningApp(QWidget):
     def _on_robot_call_clicked(self):
         if not self.udp_send_timer.isActive():
             self.udp_send_timer.start(1000)
+            
+            # --- ▼ 여기가 핵심 수정 사항 ▼ ---
+            self.robot_status_widget.adjustSize() # 내용물에 맞게 컨테이너 크기 자동 조절
+            # --- ▲ ---
+
             self._update_popup_position(self.robot_status_widget)
             self.robot_status_widget.show(); self.robot_status_widget.raise_()
             self._show_toast("로봇을 호출했습니다.")
         else:
             self._show_toast("이미 로봇이 호출되었습니다.")
 
-    # --- ▼ 3. 호출 중지 버튼 클릭 시 실행될 함수 ▼ ---
     def _on_robot_call_stop_clicked(self):
-        """'호출 중지' 버튼 클릭 시 실행될 슬롯."""
         if self.udp_send_timer.isActive():
             self.udp_send_timer.stop()
             self.robot_status_widget.hide()
             self._show_toast("로봇 호출을 중지했습니다.")
-            # 필요 시 로봇에게 중지 신호를 보낼 수 있습니다.
-            # self.udp_socket.sendto(b"stop", (self.udp_target_ip, self.udp_target_port))
 
     def _on_robot_message_received(self, message):
         print(f"로봇으로부터 메시지 수신: '{message}'")
