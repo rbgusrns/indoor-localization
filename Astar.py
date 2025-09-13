@@ -82,6 +82,7 @@ def find_path(grid, start, end):
     if not grid or grid[start[0]][start[1]] != 0 or grid[end[0]][end[1]] != 0:
         return None
 
+    distance_map = create_distance_map(grid)
     start_node = Node(None, start)
     end_node = Node(None, end)
 
