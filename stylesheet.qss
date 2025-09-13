@@ -4,7 +4,7 @@ QPushButton {
     width: 200px;
     height: 200px;
 
-    background-color: #4CAF50; /* Green */
+    background-color: #39ffffff; /* Green */
     border-radius: 2px;
     border: none;
     color: white;
