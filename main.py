@@ -1,7 +1,7 @@
 import sys
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout,QPushButton, QShortcut
-from PyQt5.QtCore import QTimer, QMutex, Qt
-from PyQt5.QtGui     import QKeySequence
+from PyQt5.QtCore import QTimer, QMutex, Qt, QFile, QTextStream
+from PyQt5.QtGui     import QKeySequence, QIcon
 from app_config import load_config
 from fingerprinting import FingerprintDB
 from trilateration import EKF
@@ -91,6 +91,15 @@ on_detect.speed = 0.0
 on_detect.yaw = 0
 
 
+
+def load_stylesheet(self):
+    # stylesheet.qss 파일 로드
+    qss_file = QFile('stylesheet.qss')
+    qss_file.open(QFile.ReadOnly | QFile.Text)
+    qss_stream = QTextStream(qss_file)
+    self.setStyleSheet(qss_stream.readAll())
+    qss_file.close()
+
 if __name__ == "__main__":
     # 설정 로드
     ser = serial.Serial('/dev/ttyUSB0', 115200)
@@ -132,9 +141,10 @@ if __name__ == "__main__":
 
 
     nav_btn = QPushButton("NAV")
-    
-    robot_btn = QPushButton("Robot")
+    nav_btn.setObjectName("NAV")
 
+    robot_btn = QPushButton("Robot")
+    robot_btn.setObjectName("Robot")
     main_layout = QHBoxLayout()
     right_layout = QVBoxLayout()
 
@@ -145,6 +155,9 @@ if __name__ == "__main__":
     main_layout.addLayout(right_layout)
 
     widget.setLayout(main_layout)
+    style_string = load_stylesheet('stylesheet.qss')
+    if style_string:
+        widget.setStyleSheet(style_string)
 
     #layout = QVBoxLayout(widget)
     
