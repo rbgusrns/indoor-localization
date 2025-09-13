@@ -2,11 +2,11 @@
 
 
 
-QWidget { background-color: #000000; }
+QWidget { background-color: #a0a0a0ff; }
 
 QPushButton {
 
-    width: 200px;
+    width: 180px;
     height: 200px;
 
     background-color: #09FFDE; /* Green */
