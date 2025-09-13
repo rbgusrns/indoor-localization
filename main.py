@@ -1,222 +1,197 @@
 import sys
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout,QPushButton, QShortcut
+import serial
+import time
+import numpy as np
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QShortcut
 from PyQt5.QtCore import QTimer, QMutex, Qt, QFile, QTextStream
-from PyQt5.QtGui     import QKeySequence, QIcon
+from PyQt5.QtGui import QKeySequence
+
+# 아래 모듈들은 실제 파일이 존재해야 합니다.
 from app_config import load_config
 from fingerprinting import FingerprintDB
 from trilateration import EKF
 from ble_scanner import BLEScanThread
 from map_viewer import MapViewer
-import numpy as np
 from serial_reader import SerialReader
-import serial
-import time
 from event import SelectionDialog
-# RSSI 보호용 뮤텍스
-rssi_mutex = QMutex()
-#mutex: 한번에 하나의 스레드만 이 자원에 접근할 수 있도록 함
-#먼소리냐..
 
-
-
-
-# on_detect 콜백
-def on_detect(rssi_vec, mv, fp, ekf, k, speed, yaw):
-    # 1) RSSI 누적 (스레드 안전)
-    rssi_mutex.lock()
-    merged = getattr(on_detect, 'rssi', {}).copy() 
-    #getattr(): on_detect.rssi 반환, 없다면 빈 딕셔너리 반환
-    #merged에 기존 RSSI 복사 .copy()
-    merged.update(rssi_vec) # .update(): 새로운 RSSI 추가
-    on_detect.rssi = merged # 기존 딕셔너리에 업데이트
-    
-    rssi_mutex.unlock()
-
-    #BLE fingerprinting으로 위치 추정
-    if len(on_detect.rssi) >= 6: #BLE 스캔으로 받은 RSSI가 일정 개수 이상일 때만
-        
-        pts, candidates , dists = fp.get_position(merged, k=k)
-        pts = np.array(pts)
-        #print(f"RSSI: {on_detect.rssi} BLE: {pts} ")
-        print(f"BLE: {candidates} ")
-        #print(f"BLE: {pts}")
-        dists = np.array(dists)
-        #weights = 1.0 / (dists + 1e-5)
-        #ble_pos = np.average(pts, axis=0, weights=weights)
-        ble_pos = pts
-        #print(f"{ble_pos}")
-        # 4) EKF 업데이트 단계
-        z = np.array([ble_pos[0], ble_pos[1]])
-        ekf.update(z)
-
-        # 5) 융합 결과 얻기
-        fused_pos = ekf.get_state()[:2]
-        #print(f"{fused_pos}")
-        # 6) UI 업데이트
-        mv.update_debug(merged, fused_pos, dists)
-        mv.mark_estimated_position(*fused_pos, yaw)
-        
-def speed_callback(speed = 0.0):
-    global fused_pos
-    on_detect.speed = speed
-    
-    ekf.predict(on_detect.yaw, speed)
-    fused_pos = ekf.get_state()[:2]
-    #mv.mark_estimated_position(*fused_pos,on_detect.yaw) #*fused_pos: 언패킹. 튜플이나 리스트이면 값을 풀어서 전달함.
-
-def yaw_callback(yaw):
-    global fused_pos
-    on_detect.yaw = yaw
-    on_detect.speed = 0.0
-    #ekf.predict(on_detect.yaw, on_detect.speed)
-    #fused_pos = ekf.get_state()[:2]
-    #mv.mark_estimated_position(*temp_pos,on_detect.yaw)
-    mv.move_to(*fused_pos,on_detect.yaw)
-    
-    
-
-# 초기 속성
-# INIT_X,INIT_Y = (1306,978) 픽셀
-#INIT_X,INIT_Y = (37.5,37.5) -> 681,668
-#INIT_X,INIT_Y = (71.93,54.91) -> (909,668)
-#INIT_X,INIT_Y = (36.5,28)
-INIT_X,INIT_Y = (0,0)
+# --- 초기 설정 값 ---
+# INIT_X, INIT_Y = (36.5, 28)
+INIT_X, INIT_Y = (0, 0)
 INIT_YAW = 180.0
-# 초기 위치 설정
 
-fused_pos = (INIT_X, INIT_Y) # 초기 위치 설정
-temp_pos = (INIT_X, INIT_Y) #초기 위치 설정
-
-on_detect.rssi = {}
-on_detect.speed = 0.0
-on_detect.yaw = 0
-
-# '진료실 선택하기' 버튼이 눌렸을 때 실행될 슬롯(메서드)
-def show_selection_dialog(self):
-    print(1)
-    # SelectionDialog 인스턴스 생성
-    dialog = SelectionDialog(self)
-
-    # exec()는 다이얼로그가 닫힐 때까지 코드 실행을 멈춤
-    # 사용자가 선택을 완료하면 result에 QDialog.Accepted(값: 1) 또는 QDialog.Rejected(값: 0)가 담김
-    result = dialog.exec()
-
-    # 만약 사용자가 진료실을 선택했다면(dialog.accept()가 호출되었다면)
-    if result:
-        selected = dialog.selected_room
-        self.result_label.setText(f"'{selected}'을(를) 선택하셨습니다.")
-        print(f"선택된 진료실: {selected}")
-    else:
-        self.result_label.setText("진료실 선택을 취소했습니다.")
-        print("선택이 취소되었습니다.")
-
-def load_stylesheet(widget, filename):
+class IndoorPositioningApp(QWidget):
     """
-    파일을 읽어 해당 위젯에 스타일시트를 적용하는 함수
+    실내 측위 시스템의 메인 애플리케이션 클래스.
+    UI, 데이터 처리, 상태 관리를 모두 캡슐화합니다.
     """
-    qss_file = QFile(filename)
-    if qss_file.open(QFile.ReadOnly | QFile.Text):
-        qss_stream = QTextStream(qss_file)
-        widget.setStyleSheet(qss_stream.readAll())
-        qss_file.close()
+    def __init__(self, config):
+        super().__init__()
+        self.config = config
+        
+        # --- 상태 변수 및 동기화 객체 초기화 ---
+        self.rssi_mutex = QMutex()
+        self.rssi_data = {}
+        self.current_speed = 0.0
+        self.current_yaw = INIT_YAW
+        self.fused_pos = (INIT_X, INIT_Y)
+
+        # --- 핵심 로직 컴포넌트 초기화 ---
+        self._init_logic_components()
+        
+        # --- UI 초기화 ---
+        self._init_ui()
+        
+        # --- 시그널-슬롯 연결 ---
+        self._connect_signals()
+
+        # --- 타이머 시작 ---
+        self._start_timers()
+
+    def _init_logic_components(self):
+        """핵심 로직(EKF, Fingerprint DB, 스캐너 등) 객체들을 생성합니다."""
+        self.ekf = EKF(self.config.get('ekf_dt', 1.0))
+        
+        self.fingerprint_db = FingerprintDB()
+        self.fingerprint_db.load(self.config.get('fingerprint_db_path', 'fingerprint_db.json'))
+
+        self.ble_scanner_thread = BLEScanThread(self.config)
+        
+        # IMU 시리얼 포트 설정 및 초기화
+        self.serial_port = serial.Serial('/dev/ttyUSB0', 115200)
+        time.sleep(1)
+        self.serial_port.write(b'ZERO\n')
+
+        self.serial_reader = SerialReader(port=self.config.get('imu_port', '/dev/ttyUSB0'), baudrate=115200)
+        self.serial_reader.start()
+
+    def _init_ui(self):
+        """UI 위젯들을 생성하고 레이아웃을 설정합니다."""
+        self.map_viewer = MapViewer(self.config['map_file'], self.config['px_per_m_x'], self.config['px_per_m_y'])
+        self.map_viewer._init_est_items(INIT_X, INIT_Y, INIT_YAW)
+        
+        # 버튼 생성
+        self.nav_btn = QPushButton("길안내")
+        self.nav_btn.setObjectName("NAV")
+        
+        self.robot_btn = QPushButton("로봇\n호출")
+        self.robot_btn.setObjectName("Robot")
+
+        # 레이아웃 설정
+        right_layout = QVBoxLayout()
+        right_layout.addWidget(self.nav_btn)
+        right_layout.addWidget(self.robot_btn)
+
+        main_layout = QHBoxLayout(self)
+        main_layout.addWidget(self.map_viewer)
+        main_layout.addLayout(right_layout)
+        
+        # 윈도우 설정
+        self.setWindowTitle("ODIGA")
+        self.setFocusPolicy(Qt.StrongFocus)
+        self.load_stylesheet('stylesheet.qss')
+        self.showFullScreen()
+        self.setFocus()
+
+    def _connect_signals(self):
+        """각종 컴포넌트의 시그널을 클래스의 메서드(슬롯)에 연결합니다."""
+        # BLE 스캐너 시그널
+        self.ble_scanner_thread.detected.connect(self._on_ble_device_detected)
+        
+        # 시리얼 리더 시그널
+        self.serial_reader.heading_received.connect(self._on_yaw_update)
+        self.serial_reader.speed_received.connect(self._on_speed_update)
+        
+        # UI 버튼 시그널
+        self.nav_btn.clicked.connect(self._show_selection_dialog)
+
+        # 단축키 설정
+        shortcut = QShortcut(QKeySequence("G"), self)
+        shortcut.activated.connect(self._start_ble_scan)
+
+    def _start_timers(self):
+        """주기적으로 실행될 타이머들을 설정하고 시작합니다."""
+        self.rssi_clear_timer = QTimer(self)
+        self.rssi_clear_timer.timeout.connect(self._clear_rssi_cache)
+        self.rssi_clear_timer.start(2000) # 2초마다 RSSI 캐시 초기화
+
+    # --- 슬롯 메서드 (이벤트 핸들러) ---
+
+    def _on_ble_device_detected(self, rssi_vec):
+        """BLE 신호가 감지되었을 때 호출되는 슬롯."""
+        self.rssi_mutex.lock()
+        self.rssi_data.update(rssi_vec)
+        local_rssi_copy = self.rssi_data.copy()
+        self.rssi_mutex.unlock()
+
+        if len(local_rssi_copy) >= 6:
+            # 1. Fingerprinting으로 위치 추정
+            pts, candidates, dists = self.fingerprint_db.get_position(local_rssi_copy, k=self.config['k_neighbors'])
+            ble_pos = np.array(pts)
+            print(f"BLE Candidates: {candidates}")
+
+            # 2. EKF 업데이트
+            z = np.array([ble_pos[0], ble_pos[1]])
+            self.ekf.update(z)
+
+            # 3. 융합 결과 획득 및 UI 업데이트
+            self.fused_pos = self.ekf.get_state()[:2]
+            self.map_viewer.update_debug(local_rssi_copy, self.fused_pos, np.array(dists))
+            self.map_viewer.mark_estimated_position(*self.fused_pos, self.current_yaw)
+
+    def _on_speed_update(self, speed):
+        """속도 정보가 수신되었을 때 호출되는 슬롯."""
+        self.current_speed = speed
+        self.ekf.predict(self.current_yaw, self.current_speed)
+        self.fused_pos = self.ekf.get_state()[:2]
+        # self.map_viewer.mark_estimated_position(*self.fused_pos, self.current_yaw)
+
+    def _on_yaw_update(self, yaw):
+        """방향(Yaw) 정보가 수신되었을 때 호출되는 슬롯."""
+        self.current_yaw = yaw
+        # EKF 예측은 속도 업데이트 시 수행되므로 여기서는 UI만 갱신
+        self.map_viewer.move_to(*self.fused_pos, self.current_yaw)
+
+    def _clear_rssi_cache(self):
+        """오래된 RSSI 데이터를 주기적으로 삭제하는 슬롯."""
+        self.rssi_mutex.lock()
+        self.rssi_data.clear()
+        self.rssi_mutex.unlock()
+        # print("RSSI cache cleared.")
+
+    def _show_selection_dialog(self):
+        """'길안내' 버튼 클릭 시 진료실 선택 다이얼로그를 표시하는 슬롯."""
+        dialog = SelectionDialog(self)
+        if dialog.exec():
+            selected = dialog.selected_room
+            # self.result_label.setText(f"'{selected}'을(를) 선택하셨습니다.") # result_label이 없으므로 주석 처리
+            print(f"선택된 진료실: {selected}")
+        else:
+            # self.result_label.setText("진료실 선택을 취소했습니다.")
+            print("선택이 취소되었습니다.")
+            
+    def _start_ble_scan(self):
+        """'G' 키를 눌렀을 때 BLE 스캔을 시작합니다."""
+        if not self.ble_scanner_thread.isRunning():
+            self.ble_scanner_thread.start()
+            print("BLE Scan Started.")
+
+    def load_stylesheet(self, filename):
+        """외부 QSS 파일을 읽어 위젯에 스타일시트를 적용합니다."""
+        qss_file = QFile(filename)
+        if qss_file.open(QFile.ReadOnly | QFile.Text):
+            qss_stream = QTextStream(qss_file)
+            self.setStyleSheet(qss_stream.readAll())
+            qss_file.close()
 
 if __name__ == "__main__":
-    # 설정 로드
-    ser = serial.Serial('/dev/ttyUSB0', 115200)
-    time.sleep(1)
-
-    ser.write(b'ZERO\n') #시작시 0으로 초기화
-    cfg = load_config()
-    dt = cfg.get('ekf_dt', 1.0)
+    app = QApplication(sys.argv)
     
-    # IMU 시리얼 리더 설정
-    serial_reader = SerialReader(port=cfg.get('imu_port', '/dev/ttyUSB0'), baudrate=115200)
-
-
-    #시리얼 콜백 설정 및 시작 !
-    serial_reader.heading_received.connect(yaw_callback)
-    serial_reader.speed_received.connect(speed_callback)
-    serial_reader.start()
-
-    # EKF 초기화
-    ekf = EKF(dt)
-
-    # Fingerprinting DB 로드
-    fp = FingerprintDB()
-    fp.load(cfg.get('fingerprint_db_path', 'fingerprint_db.json'))
-
-    # PyQt 앱 구성
-    app = QApplication(sys.argv) #어플리케이션 엔진 생성 sys.argv는 실행 옵션이며, 터미널에서 넘긴 인자를 저장
-    widget = QWidget() # 모든 것을 담을 빈 상자 생성.
-    mv = MapViewer(cfg['map_file'], cfg['px_per_m_x'], cfg['px_per_m_y']) #맵 뷰어 객체 생성
-    mv._init_est_items(INIT_X, INIT_Y,INIT_YAW) # 초기 위치
-    #mv.update_heading(INIT_YAW)
-    #mv.move_to(*fused_pos,INIT_YAW)
-    # BLE 스캐너 설정
-    thread = BLEScanThread(cfg) #BLE 스캐너 쓰레드 객체 생성
-    thread.detected.connect(lambda vec: on_detect( #connect: emit 받아서 실행 !
-        vec, mv, fp, ekf, cfg['k_neighbors'],
-        on_detect.speed, on_detect.yaw
-    ))
-
-
-    nav_btn = QPushButton("길안내")
-    nav_btn.setObjectName("NAV")
-    nav_btn.clicked.connect(show_selection_dialog)
-    robot_btn = QPushButton("로봇\n호출")
-    robot_btn.setObjectName("Robot")
-    main_layout = QHBoxLayout()
-    right_layout = QVBoxLayout()
-
-    right_layout.addWidget(nav_btn)
-    right_layout.addWidget(robot_btn)
+    # 설정 파일 로드
+    config = load_config()
     
-    main_layout.addWidget(mv)
-    main_layout.addLayout(right_layout)
-
-    widget.setLayout(main_layout)
-    load_stylesheet(widget,'stylesheet.qss')
-   # style_string = load_stylesheet(widget,'stylesheet.qss')
-   # if style_string:
-   #     widget.setStyleSheet(style_string)
-
-    #layout = QVBoxLayout(widget)
+    # 메인 애플리케이션 인스턴스 생성 및 실행
+    main_window = IndoorPositioningApp(config)
+    main_window.show()
     
-    #layout.addWidget(mv)
-    #widget.setLayout(layout) #위젯에 레이아웃 적용.
-    widget.setFocusPolicy(Qt.StrongFocus) #위젯이 포커스를 받을 자격을 준다. 포커스 = 마우스로 클릭했을 때 그 상황. 
-    widget.show() #버튼 두개와 맵을 담은 위젯을 보여줌.
-    widget.showFullScreen()
-    widget.setFocus() #위젯에게 포커스 부여.
-    widget.setWindowTitle("ODIGA") #제목 설정
-    
-    shortcut = QShortcut(QKeySequence("G"), widget) # G키 단축키 지정
-    shortcut.activated.connect(lambda: thread.start() if not thread.isRunning() else None) #G누를시 thread.start()로 연결
-
-    # RSSI 초기화 타이머
-    clear_timer = QTimer()
-    def clear_rssi(): #오래된 RSSI 지우기
-        rssi_mutex.lock()
-        on_detect.rssi.clear()
-        rssi_mutex.unlock()
-    clear_timer.timeout.connect(clear_rssi)
-    clear_timer.start(2000)
-    
-    '''
-    update_timer = QTimer()
-    def update_position():
-        global fused_pos
-        global temp_pos
-        temp_pos = fused_pos # 속도 패킷이 들어왔을 때만 위치를 업데이트 하기위한 임시 position
-        #print(f"EKF: {ekf.get_state()[:2]}")
-        #mv.mark_estimated_position(*fused_pos, on_detect.yaw)
-    
-    update_timer.timeout.connect(update_position)
-    update_timer.start(500) # 0.5초마다 위치 업데이트
-    '''
-
-    # 이벤트 루프 시작
     sys.exit(app.exec_())
-    #app이 프로그램 엔진이므로, 이를 시작한다는 뜻.
-    #app.exec_() : Qt의 이벤트 루프 시작. 시작하고 일하다가  프로그램 종료시 종료 코드를 반환하는데, (0이면 정상) 그 코드를 sys.exit()에 넘겨줌.
-    #sys.exit() : 프로그램 종료. 종료 코드 반환.
