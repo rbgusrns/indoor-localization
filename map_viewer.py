@@ -112,27 +112,27 @@ class MapViewer(QGraphicsView):
         print(self._cur_pos)
         self._cur_heading = (start_h + delta_h) % 360
 
-        def draw_path(self, path_points):
+    def draw_path(self, path_points):
 
-            # 1. 기존에 그려진 경로가 있다면 삭제
-            for item in self.path_items:
-                self.scene.removeItem(item)
-            self.path_items.clear()
+        # 1. 기존에 그려진 경로가 있다면 삭제
+        for item in self.path_items:
+            self.scene.removeItem(item)
+        self.path_items.clear()
 
-            if not path_points or len(path_points) < 2:
-                return
+        if not path_points or len(path_points) < 2:
+            return
 
-            # 2. 새로운 경로를 그릴 펜 설정 (빨간색, 두께 3)
-            pen = QPen(QColor(255, 0, 0, 200), 3) # (R, G, B, 투명도)
-            pen.setCapStyle(Qt.RoundCap)
-            pen.setJoinStyle(Qt.RoundJoin)
+        # 2. 새로운 경로를 그릴 펜 설정 (빨간색, 두께 3)
+        pen = QPen(QColor(255, 0, 0, 200), 3) # (R, G, B, 투명도)
+        pen.setCapStyle(Qt.RoundCap)
+        pen.setJoinStyle(Qt.RoundJoin)
 
-            # 3. 경로의 각 지점을 선으로 연결
-            for i in range(len(path_points) - 1):
-                p1 = path_points[i]
-                p2 = path_points[i+1]
-                line = QGraphicsLineItem(p1.x(), p1.y(), p2.x(), p2.y())
-                line.setPen(pen)
-                line.setZValue(10)  # 마커(20)보다는 아래, 지도(0)보다는 위에 표시
-                self.scene.addItem(line)
-                self.path_items.append(line) # 삭제를 위해 리스트에 추가
+        # 3. 경로의 각 지점을 선으로 연결
+        for i in range(len(path_points) - 1):
+            p1 = path_points[i]
+            p2 = path_points[i+1]
+            line = QGraphicsLineItem(p1.x(), p1.y(), p2.x(), p2.y())
+            line.setPen(pen)
+            line.setZValue(10)  # 마커(20)보다는 아래, 지도(0)보다는 위에 표시
+            self.scene.addItem(line)
+            self.path_items.append(line) # 삭제를 위해 리스트에 추가
