@@ -4,12 +4,13 @@ QPushButton {
     border-radius: 2px;
     border: none;
     color: white;
-    padding: 60px 32px;
+    padding: 70px 32px;
     text-align: center;
     text-decoration: none;
     display: inline-block;
     font-family: 'Malgun Gothic', 'Arial', sans-serif;
-    font-size: 16px;
+    font-size: 20px;
+    font-weight: bold;
     margin: 4px 2px;
     transition-duration: 0.4s;
     cursor: pointer;

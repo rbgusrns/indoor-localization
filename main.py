@@ -142,10 +142,10 @@ if __name__ == "__main__":
     ))
 
 
-    nav_btn = QPushButton("NAV")
+    nav_btn = QPushButton("길안내")
     nav_btn.setObjectName("NAV")
 
-    robot_btn = QPushButton("Robot")
+    robot_btn = QPushButton("로봇 호출")
     robot_btn.setObjectName("Robot")
     main_layout = QHBoxLayout()
     right_layout = QVBoxLayout()
