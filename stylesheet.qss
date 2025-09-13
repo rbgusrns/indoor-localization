@@ -25,3 +25,6 @@ QPushButton:hover {
     color: black;
     border: 2px solid #09FFDE;
 }
+
+QWidget#myWindow { background-color: #000000; }
+
