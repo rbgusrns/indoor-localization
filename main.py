@@ -137,8 +137,7 @@ if __name__ == "__main__":
     stop_btn.clicked.connect(thread.stop)
 
     # 레이아웃 구성
-    layout = QVBoxLayout(widget) #위젯 위에 수직 레이아웃(구역) 생성.
-    
+    layout = QVBoxLayout(widget) #위젯 위에 수직 레이아웃(구역) 생성.    
     layout.addWidget(start_btn)
     layout.addWidget(stop_btn)
     widget.setLayout(layout) #위젯에 레이아웃 적용.
