@@ -2,6 +2,9 @@ import heapq
 from collections import deque
 
 class Node:
+    """
+    A* 알고리즘에 사용될 노드 클래스입니다.
+    """
     def __init__(self, parent=None, position=None):
         self.parent = parent
         self.position = position
@@ -10,9 +13,14 @@ class Node:
         self.f = 0
 
     def __eq__(self, other):
+        """두 노드의 위치가 같으면 동일한 노드로 취급합니다."""
         return self.position == other.position
 
     def __lt__(self, other):
+        """
+        heapq에서 노드들을 f값 기준으로 정렬하기 위한 비교 연산자입니다.
+        f값이 같을 경우 h값이 더 작은 쪽을 우선합니다.
+        """
         if self.f == other.f:
             return self.h < other.h
         return self.f < other.f
@@ -25,12 +33,14 @@ def create_distance_map(grid):
     distance_map = [[float('inf')] * cols for _ in range(rows)]
     queue = deque()
 
+    # 1. 모든 벽을 큐에 추가하고 거리를 0으로 설정
     for r in range(rows):
         for c in range(cols):
             if grid[r][c] == 1:
                 distance_map[r][c] = 0
                 queue.append((r, c))
 
+    # 2. BFS 실행
     while queue:
         r, c = queue.popleft()
         for dr, dc in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
@@ -39,6 +49,7 @@ def create_distance_map(grid):
                 distance_map[nr][nc] = distance_map[r][c] + 1
                 queue.append((nr, nc))
     
+    # 3. 가장 먼 거리(가장 중앙) 값 찾기
     max_dist = 0
     for r in range(rows):
         for c in range(cols):
@@ -49,7 +60,7 @@ def create_distance_map(grid):
 
 def find_path(grid, start, end, distance_map, max_dist, penalty_strength):
     """
-    A* 알고리즘 (중앙 경로 선호 로직 적용)
+    A* 알고리즘 (대각선 이동 및 중앙 경로 선호 로직 적용)
     """
     if not grid or grid[start[0]][start[1]] != 0 or grid[end[0]][end[1]] != 0:
         return None
@@ -82,9 +93,11 @@ def find_path(grid, start, end, distance_map, max_dist, penalty_strength):
                 current = current.parent
             return path[::-1]
 
-        for new_position in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
-            node_position = (current_node.position[0] + new_position[0],
-                             current_node.position[1] + new_position[1])
+        # --- ▼ 대각선 이동 기능 추가 ▼ ---
+        # 8방향(상하좌우, 대각선)으로 탐색
+        for move_r, move_c in [(-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (-1, 1), (1, -1), (1, 1)]:
+            node_position = (current_node.position[0] + move_r,
+                             current_node.position[1] + move_c)
 
             if not (0 <= node_position[0] <= max_row and 0 <= node_position[1] <= max_col):
                 continue
@@ -93,12 +106,21 @@ def find_path(grid, start, end, distance_map, max_dist, penalty_strength):
             if node_position in closed_set:
                 continue
 
+            # 대각선 이동 시 코너를 통과하지 못하도록 방지
+            if abs(move_r) == 1 and abs(move_c) == 1:
+                if grid[current_node.position[0] + move_r][current_node.position[1]] != 0 or \
+                   grid[current_node.position[0]][current_node.position[1] + move_c] != 0:
+                    continue
+
             neighbor = Node(current_node, node_position)
             
-            # --- 중앙 경로 선호를 위한 비용 계산 ---
+            # 이동 비용 계산 (직선: 1, 대각선: 1.414)
+            base_cost = 1.414 if abs(move_r) == 1 and abs(move_c) == 1 else 1.0
+
+            # 중앙 경로 선호를 위한 페널티 계산
             dist_to_wall = distance_map[node_position[0]][node_position[1]]
             penalty = (max_dist - dist_to_wall) / max_dist if max_dist > 0 else 0
-            step_cost = 1 + penalty_strength * penalty
+            step_cost = base_cost + penalty_strength * penalty
             
             neighbor.g = current_node.g + step_cost
             neighbor.h = abs(neighbor.position[0] - end_node.position[0]) + \
@@ -113,45 +135,3 @@ def find_path(grid, start, end, distance_map, max_dist, penalty_strength):
 
     print("경로를 찾을 수 없습니다.")
     return None
-
-# --- 사용 예시 ---
-if __name__ == '__main__':
-    test_map = [
-        [0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
-        [0, 1, 1, 0, 1, 0, 1, 0, 1, 0],
-        [0, 1, 0, 0, 0, 0, 1, 0, 1, 0],
-        [0, 0, 0, 1, 1, 0, 1, 0, 0, 0],
-        [0, 1, 0, 0, 0, 0, 0, 0, 1, 0],
-        [0, 1, 1, 1, 1, 1, 1, 0, 1, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 1, 0],
-        [1, 1, 1, 0, 1, 1, 1, 1, 1, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 1, 1, 1, 1, 1, 1, 1, 0]
-    ]
-    start_point = (0, 0)
-    end_point = (8, 9)
-
-    # 1. 경로 탐색 전, 맵을 분석하여 거리 맵을 미리 생성
-    distance_map, max_dist = create_distance_map(test_map)
-    
-    # 2. 페널티 강도 설정 (값이 클수록 중앙을 더 강하게 선호)
-    penalty_strength = 10.0
-
-    print(f"시작점: {start_point}, 도착점: {end_point}")
-    # 3. find_path 함수에 필요한 모든 정보를 인자로 전달
-    path = find_path(test_map, start_point, end_point, distance_map, max_dist, penalty_strength)
-
-    if path:
-        print(f"찾은 경로 (총 {len(path)} 단계):")
-        print(path)
-        
-        map_for_display = [row[:] for row in test_map]
-        for r, c in path:
-            if (r, c) != start_point and (r, c) != end_point:
-                map_for_display[r][c] = '*'
-
-        print("\n경로 시각화:")
-        for row in map_for_display:
-            print(" ".join(str(cell) for cell in row))
-    else:
-        print("경로를 찾지 못했습니다.")
