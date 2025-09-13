@@ -92,13 +92,15 @@ on_detect.yaw = 0
 
 
 
-def load_stylesheet(self):
-    # stylesheet.qss 파일 로드
-    qss_file = QFile('stylesheet.qss')
-    qss_file.open(QFile.ReadOnly | QFile.Text)
-    qss_stream = QTextStream(qss_file)
-    self.setStyleSheet(qss_stream.readAll())
-    qss_file.close()
+def load_stylesheet(widget, filename):
+    """
+    파일을 읽어 해당 위젯에 스타일시트를 적용하는 함수
+    """
+    qss_file = QFile(filename)
+    if qss_file.open(QFile.ReadOnly | QFile.Text):
+        qss_stream = QTextStream(qss_file)
+        widget.setStyleSheet(qss_stream.readAll())
+        qss_file.close()
 
 if __name__ == "__main__":
     # 설정 로드
@@ -155,9 +157,10 @@ if __name__ == "__main__":
     main_layout.addLayout(right_layout)
 
     widget.setLayout(main_layout)
-    style_string = load_stylesheet('stylesheet.qss')
-    if style_string:
-        widget.setStyleSheet(style_string)
+    load_stylesheet(widget,'stylesheet.qss')
+   # style_string = load_stylesheet(widget,'stylesheet.qss')
+   # if style_string:
+   #     widget.setStyleSheet(style_string)
 
     #layout = QVBoxLayout(widget)
     
