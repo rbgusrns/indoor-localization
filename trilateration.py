@@ -1,4 +1,4 @@
-# trilateration.py
+# 칼만필터.
 import math
 from scipy.optimize import least_squares
 from collections import deque

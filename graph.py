@@ -1,3 +1,5 @@
+#수집한 데이터로 그래프를 띄우는 파일.
+
 import re
 import matplotlib.pyplot as plt
 

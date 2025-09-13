@@ -1,3 +1,5 @@
+#heatmap을 heatmaps에 저장하는 파일.
+
 import json
 import matplotlib.pyplot as plt
 import seaborn as sns

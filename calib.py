@@ -1,3 +1,5 @@
+#핑거프린팅 캘리브래이션 파일.
+
 import sys
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QGraphicsEllipseItem, QGraphicsPixmapItem, QShortcut
 from PyQt5.QtCore import Qt, QRectF

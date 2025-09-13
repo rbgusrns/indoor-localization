@@ -1,3 +1,5 @@
+#핑거프린팅 알고리즘 파일.
+
 import json
 import numpy as np
 from sklearn.neighbors import BallTree

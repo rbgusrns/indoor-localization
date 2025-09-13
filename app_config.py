@@ -1,3 +1,5 @@
+#yaml 파일을 불러오고 해석하는 파일.
+
 import yaml
 
 def load_config(path="config.yaml"):  

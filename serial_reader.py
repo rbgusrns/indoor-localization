@@ -1,3 +1,5 @@
+#시리얼 통신 받는 파일.
+
 from PyQt5.QtCore import QThread, pyqtSignal
 import serial
 

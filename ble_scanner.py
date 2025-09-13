@@ -1,3 +1,5 @@
+#멀티쓰레딩을 통해 RSSI 신호를 받는 파일. 
+
 import sys
 import asyncio
 from PyQt5.QtCore import QThread, pyqtSignal, Qt

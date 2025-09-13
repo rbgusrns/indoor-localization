@@ -1,3 +1,5 @@
+# 설정 변수들 저장 파일.
+
  px_per_m_x: 20
  px_per_m_y: 20
  scan_interval: 0.2
