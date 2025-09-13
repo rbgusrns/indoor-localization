@@ -54,6 +54,50 @@ class IndoorPositioningApp(QWidget):
         # --- 타이머 시작 ---
         self._start_timers()
 
+    def _update_navigation_path(self):
+        """현재 위치를 기준으로 목표 지점까지의 경로를 다시 계산하고 지도에 표시합니다."""
+        # 1. 길안내 기능이 활성화 상태인지 확인 (목표 지점이 설정되었는지)
+        if not hasattr(self, 'target_room') or self.target_room is None:
+            return # 목표가 없으면 아무것도 안 함
+
+        # 2. 현재 위치와 목표 위치를 그리드 좌표로 변환
+        start_m = self.fused_pos
+        end_m = self.target_room
+        
+        start_grid = self.meters_to_grid(start_m)
+        end_grid = self.meters_to_grid(end_m)
+        
+        # (Optional) 현재 그리드 셀에서 변경이 없으면 계산을 건너뛰어 성능 향상
+        if hasattr(self, 'last_start_grid') and self.last_start_grid == start_grid:
+            return
+        self.last_start_grid = start_grid # 현재 그리드 위치 저장
+
+        print(f"경로 갱신: {start_grid} -> {end_grid}")
+
+        # 3. A* 알고리즘으로 경로 탐색
+        penalty_strength = self.config.get('penalty_strength', 10.0)
+        path_grid = find_path(
+            self.binary_grid, 
+            start_grid, 
+            end_grid,
+            self.distance_map,
+            self.max_dist,
+            penalty_strength
+        )
+
+        # 4. 결과를 픽셀 좌표로 변환하여 지도에 그리기 (화살표 기능 포함)
+        if path_grid and len(path_grid) >= 2:
+            arrow_segment_grid = path_grid[-2:]
+            main_path_grid = path_grid[:-1]
+            main_path_pixels = [self.grid_to_pixels(pos) for pos in main_path_grid]
+            arrow_segment_pixels = [self.grid_to_pixels(pos) for pos in arrow_segment_grid]
+            self.map_viewer.draw_path_with_arrow(main_path_pixels, arrow_segment_pixels)
+        elif path_grid:
+            path_pixels = [self.grid_to_pixels(pos) for pos in path_grid]
+            self.map_viewer.draw_path_with_arrow(path_pixels, None)
+        else:
+            self.map_viewer.draw_path_with_arrow(None, None)
+
     def _init_logic_components(self):
         """핵심 로직(EKF, Fingerprint DB, 스캐너 등) 객체들을 생성합니다."""
 
@@ -156,12 +200,16 @@ class IndoorPositioningApp(QWidget):
             self.map_viewer.update_debug(local_rssi_copy, self.fused_pos, np.array(dists))
             self.map_viewer.mark_estimated_position(*self.fused_pos, self.current_yaw) #현재 좌표와 방향을 맵에 출력함. *은 언패킹 연산자.
 
+            self._update_navigation_path()
+
     def _on_speed_update(self, speed):
         """속도 정보가 수신되었을 때 호출되는 슬롯."""
         self.current_speed = speed
         self.ekf.predict(self.current_yaw, self.current_speed)
         self.fused_pos = self.ekf.get_state()[:2]
         # self.map_viewer.mark_estimated_position(*self.fused_pos, self.current_yaw)
+
+        self._update_navigation_path()
 
     def _on_yaw_update(self, yaw):
         """방향(Yaw) 정보가 수신되었을 때 호출되는 슬롯."""
@@ -181,42 +229,20 @@ class IndoorPositioningApp(QWidget):
         dialog = SelectionDialog(self)
         if dialog.exec():
             selected = dialog.selected_room
-            # self.result_label.setText(f"'{selected}'을(를) 선택하셨습니다.") # result_label이 없으므로 주석 처리
             print(f"선택된 진료실: {selected}")
-            self.target_room = self.room_coords[selected] #선택한 진료실의 좌표 튜플을 얻음. 
+            
+            # 1. 목표 지점 설정
+            self.target_room = self.room_coords[selected]
             print(f"'{selected}' 길안내 시작. 목표 좌표(m): {self.target_room}")
-            # 1. 시작점과 도착점 좌표를 그리드 좌표로 변환
-            start_m = self.fused_pos
-            end_m = self.target_room
             
-            start_grid = self.meters_to_grid(start_m)
-            end_grid = self.meters_to_grid(end_m)
-            
-            print(f"경로 탐색 시작: {start_grid} -> {end_grid}")
-
-            penalty_strength = 10.0 # 설정 파일에서 읽어오는 것을 추천
-            path_grid = find_path(
-                self.binary_grid, 
-                start_grid, 
-                end_grid,
-                self.distance_map, # 전달
-                self.max_dist,     # 전달
-                penalty_strength   # 전달
-            )
-
-            # 3. 결과를 픽셀 좌표로 변환하여 지도에 그리기
-            if path_grid:
-                print(f"경로를 찾았습니다. (총 {len(path_grid)} 단계)")
-                path_pixels = [self.grid_to_pixels(pos) for pos in path_grid]
-                self.map_viewer.draw_path(path_pixels)
-            else:
-                print("경로 탐색에 실패했습니다.")
-                self.map_viewer.draw_path(None) # 실패 시 기존 경로 삭제
-                
+            # 2. 첫 경로 계산 및 그리기
+            self._update_navigation_path()
 
         else:
-            # self.result_label.setText("진료실 선택을 취소했습니다.")
             print("선택이 취소되었습니다.")
+            # 길안내 취소 시 목표 지점과 경로 삭제
+            self.target_room = None
+            self.map_viewer.draw_path_with_arrow(None, None)
             
     def _start_ble_scan(self):
         """'G' 키를 눌렀을 때 BLE 스캔을 시작합니다."""
