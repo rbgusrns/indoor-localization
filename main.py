@@ -77,7 +77,7 @@ class IndoorPositioningApp(QWidget):
         status_layout.setSpacing(20)
 
         status_text = QLabel("로봇이 오고 있습니다...")
-        self.stop_call_btn = QPushButton("호출 중지")
+        self.stop_call_btn = QPushButton("중지")
         self.stop_call_btn.setObjectName("StopCallButton")
 
         status_layout.addWidget(status_text)
