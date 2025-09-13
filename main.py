@@ -70,17 +70,6 @@ class IndoorPositioningApp(QWidget):
         self.toast_label = QLabel(self)
         self.toast_label.setObjectName("Toast")
         self.toast_label.setAlignment(Qt.AlignCenter)
-        
-        # --- ▼ 디버깅 코드 1: 임시 스타일 직접 적용 ▼ ---
-        # QSS 파일이 로드되지 않더라도 보이도록 강제 스타일을 입힙니다.
-        # 만약 이 스타일로 보인다면, stylesheet.qss 파일 경로 문제일 수 있습니다.
-        self.toast_label.setStyleSheet("""
-            background-color: rgba(200, 0, 0, 200); 
-            color: white;
-            font-size: 28px;
-            padding: 15px 30px;
-            border-radius: 25px;
-        """)
         self.toast_label.hide()
 
         self.map_viewer = MapViewer(self.config['map_file'], self.config['px_per_m_x'], self.config['px_per_m_y'])
@@ -118,17 +107,14 @@ class IndoorPositioningApp(QWidget):
         self.rssi_clear_timer.start(2000)
 
     def _show_toast(self, message, duration=3000):
-        print("--- _show_toast 호출됨 ---") # 디버깅 메시지
         self.toast_label.setText(message)
         self.toast_label.adjustSize()
         self._update_toast_position()
         self.toast_label.show()
         
-        # --- ▼ 디버깅 코드 2: 좌표 및 크기 정보 출력 ▼ ---
-        geo = self.toast_label.geometry()
-        print(f"토스트 알림 표시: '{message}'")
-        print(f"  - 위치 (x, y): ({geo.x()}, {geo.y()})")
-        print(f"  - 크기 (w, h): ({geo.width()}, {geo.height()})")
+        # --- ▼ 여기가 핵심 수정 사항 ▼ ---
+        # toast_label을 다른 모든 위젯들보다 맨 위로 올립니다.
+        self.toast_label.raise_()
         
         QTimer.singleShot(duration, self.toast_label.hide)
 
@@ -209,10 +195,8 @@ class IndoorPositioningApp(QWidget):
         qss_file = QFile(filename)
         if qss_file.open(QFile.ReadOnly | QFile.Text):
             self.setStyleSheet(QTextStream(qss_file).readAll())
-            print(f"'{filename}' 스타일시트 로드 성공.") # 로드 성공 메시지 추가
-            qss_file.close()
         else:
-            print(f"'{filename}' 스타일시트 로드 실패!") # 로드 실패 메시지 추가
+            print(f"'{filename}' 스타일시트 로드 실패!")
 
     def meters_to_grid(self, pos_m):
         row = int(pos_m[1] * self.config['px_per_m_y'] / self.BLOCK_SIZE)
