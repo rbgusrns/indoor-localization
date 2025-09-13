@@ -93,6 +93,7 @@ on_detect.yaw = 0
 
 # '진료실 선택하기' 버튼이 눌렸을 때 실행될 슬롯(메서드)
 def show_selection_dialog(self):
+    print(1)
     # SelectionDialog 인스턴스 생성
     dialog = SelectionDialog(self)
 
