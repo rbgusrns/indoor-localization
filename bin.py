@@ -1,4 +1,5 @@
 from PIL import Image
+from collections import deque
 
 def create_binary_map(image_path, block_size=10, wall_threshold=128):
     """
@@ -42,6 +43,39 @@ def create_binary_map(image_path, block_size=10, wall_threshold=128):
     except FileNotFoundError:
         print(f"오류: '{image_path}' 파일을 찾을 수 없습니다.")
         return None
+    
+def create_distance_map(grid):
+    """
+    BFS를 사용하여 모든 길(0) 타일에서 가장 가까운 벽(1)까지의 거리를 계산합니다.
+    """
+    rows, cols = len(grid), len(grid[0])
+    distance_map = [[float('inf')] * cols for _ in range(rows)]
+    queue = deque()
+
+    # 1. 모든 벽을 큐에 추가하고 거리를 0으로 설정
+    for r in range(rows):
+        for c in range(cols):
+            if grid[r][c] == 1:
+                distance_map[r][c] = 0
+                queue.append((r, c))
+
+    # 2. BFS 실행
+    while queue:
+        r, c = queue.popleft()
+        for dr, dc in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
+            nr, nc = r + dr, c + dc
+            if 0 <= nr < rows and 0 <= nc < cols and distance_map[nr][nc] == float('inf'):
+                distance_map[nr][nc] = distance_map[r][c] + 1
+                queue.append((nr, nc))
+    
+    # 3. 가장 먼 거리(가장 중앙) 값 찾기
+    max_dist = 0
+    for r in range(rows):
+        for c in range(cols):
+            if grid[r][c] == 0:
+                max_dist = max(max_dist, distance_map[r][c])
+
+    return distance_map, max_dist
 
 # --- 사용 예시 ---
 # 지도 이미지 파일 경로
@@ -56,3 +90,5 @@ if binary_grid:
     for row in binary_grid:
         # 각 숫자를 공백으로 구분하여 보기 좋게 출력
         print(' '.join(map(str, row)))
+
+

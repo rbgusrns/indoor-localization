@@ -1,6 +1,7 @@
 # pathfinder.py
 
 import heapq
+from collections import deque
 
 class Node:
     """
@@ -35,7 +36,46 @@ class Node:
             return self.h < other.h
         return self.f < other.f
 
+
+def create_distance_map(grid):
+
+    global distance_map,max_distance,penalty_strength
+    """
+    BFS를 사용하여 모든 길(0) 타일에서 가장 가까운 벽(1)까지의 거리를 계산합니다.
+    """
+    rows, cols = len(grid), len(grid[0])
+    distance_map = [[float('inf')] * cols for _ in range(rows)]
+    queue = deque()
+
+    # 1. 모든 벽을 큐에 추가하고 거리를 0으로 설정
+    for r in range(rows):
+        for c in range(cols):
+            if grid[r][c] == 1:
+                distance_map[r][c] = 0
+                queue.append((r, c))
+
+    # 2. BFS 실행
+    while queue:
+        r, c = queue.popleft()
+        for dr, dc in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
+            nr, nc = r + dr, c + dc
+            if 0 <= nr < rows and 0 <= nc < cols and distance_map[nr][nc] == float('inf'):
+                distance_map[nr][nc] = distance_map[r][c] + 1
+                queue.append((nr, nc))
+    
+    # 3. 가장 먼 거리(가장 중앙) 값 찾기
+    max_dist = 0
+    for r in range(rows):
+        for c in range(cols):
+            if grid[r][c] == 0:
+                max_dist = max(max_dist, distance_map[r][c])
+
+    return distance_map, max_dist
+
+
 def find_path(grid, start, end):
+
+    global distance_map,max_distance,penalty_strength
     """
     A* 알고리즘 (디버깅 버전)
     """
@@ -94,7 +134,16 @@ def find_path(grid, start, end):
                 continue
 
             neighbor = Node(current_node, node_position)
-            neighbor.g = current_node.g + 1
+            dist_to_wall = distance_map[node_position[0]][node_position[1]]
+            
+            # 2. 거리에 반비례하는 페널티 계산 (0~1 사이 값)
+            # 벽에 가까울수록(dist_to_wall가 작을수록) 페널티가 1에 가까워짐
+            penalty = (max_distance - dist_to_wall) / max_distance
+            
+            # 3. 최종 이동 비용 계산
+            step_cost = 1 + penalty_strength * penalty
+            
+            neighbor.g = current_node.g + step_cost
             neighbor.h = abs(neighbor.position[0] - end_node.position[0]) + \
                          abs(neighbor.position[1] - end_node.position[1])
             neighbor.f = neighbor.g + neighbor.h
