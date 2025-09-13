@@ -31,12 +31,11 @@ QPushButton:hover {
     border: 2px solid #ff8800;
 }
 
-#NavStatus {
-background-color: rgba(20, 20, 20, 190); / 검은색 반투명 배경 /
-color: white; / 흰색 글씨 /
-font-size: 28px; / 글씨 크기 /
-font-weight: bold; / 굵은 글씨체 /
-padding: 12px; / 안쪽 여백 /
-border-radius: 15px; / 모서리 둥글게 /
-min-height: 60px; / 최소 높이 */
+#Toast {
+    background-color: rgba(0, 0, 0, 200); /* 검은색 반투명 배경 */
+    color: white; /* 흰색 글씨 */
+    font-size: 28px; /* 글씨 크기 */
+    padding: 15px 30px; /* 안쪽 여백 (상하, 좌우) */
+    border-radius: 25px; /* 모서리를 더 둥글게 */
+    border: 2px solid rgba(255, 255, 255, 50); /* 은은한 흰색 테두리 */
 }
