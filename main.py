@@ -2,6 +2,7 @@ import sys
 import serial
 import time
 import numpy as np
+import socket # UDP 통신을 위해 socket 모듈 임포트
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QShortcut, QLabel
 from PyQt5.QtCore import QTimer, QMutex, Qt, QFile, QTextStream, QPointF
 from PyQt5.QtGui import QKeySequence
@@ -16,7 +17,6 @@ from serial_reader import SerialReader
 from event import SelectionDialog
 from bin import create_binary_map
 from Astar import find_path, create_distance_map
-import socket
 
 # --- 초기 설정 값 ---
 INIT_X, INIT_Y = (0, 0)
@@ -25,17 +25,9 @@ INIT_YAW = 180.0
 class IndoorPositioningApp(QWidget):
     def __init__(self, config):
         super().__init__()
-
         self.config = config
         self.room_coords = {room['name']: (room['x'], room['y']) for room in config['rooms']}
-
-        # 데이터를 보낼 대상 장치(로봇 등)의 IP 주소와 포트 번호
-        self.udp_target_ip = self.config.get('udp_target_ip', "192.168.0.141") # 예시 IP
-        self.udp_target_port = self.config.get('udp_target_port', 5005)
         
-        # UDP 소켓 생성
-        self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-
         self.rssi_mutex = QMutex()
         self.rssi_data = {}
         self.current_speed = 0.0
@@ -45,21 +37,21 @@ class IndoorPositioningApp(QWidget):
         self.last_start_grid = None
         self.BLOCK_SIZE = 10
 
+        # --- ▼ 1. UDP 소켓 및 타이머 초기화 ▼ ---
+        self.udp_target_ip = self.config.get('udp_target_ip', "192.168.1.5") # 데이터를 받을 장치의 IP
+        self.udp_target_port = self.config.get('udp_target_port', 12345)
+        self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        
+        # 1초(1000ms)마다 신호를 보낼 타이머 생성
+        self.udp_send_timer = QTimer(self)
+
         self._init_logic_components()
         self._init_ui()
         self._connect_signals()
         self._start_timers()
 
-    def _send_position_udp(self):
-        """현재 융합된 좌표(fused_pos)를 UDP로 전송합니다."""
-        # 전송할 메시지 생성 (예: "x:10.5,y:20.3")
-        message = f"x:{self.fused_pos[0]:.2f},y:{self.fused_pos[1]:.2f}"
-        
-        # 메시지를 바이트로 인코딩하여 전송
-        self.udp_socket.sendto(message.encode(), (self.udp_target_ip, self.udp_target_port))
-        print(f"UDP Sent: {message}") # 디버깅용
-
     def _init_logic_components(self):
+        # ... (이전과 동일)
         self.binary_grid = create_binary_map(self.config['map_file'], block_size=self.BLOCK_SIZE)
         if self.binary_grid:
             print("이진 지도 생성 완료.")
@@ -85,25 +77,23 @@ class IndoorPositioningApp(QWidget):
             self.serial_reader = None
 
     def _init_ui(self):
+        # ... (이전과 동일)
         self.toast_label = QLabel(self)
         self.toast_label.setObjectName("Toast")
         self.toast_label.setAlignment(Qt.AlignCenter)
         self.toast_label.hide()
-
         self.map_viewer = MapViewer(self.config['map_file'], self.config['px_per_m_x'], self.config['px_per_m_y'])
         self.map_viewer._init_est_items(INIT_X, INIT_Y, INIT_YAW)
         self.nav_btn = QPushButton("길안내")
         self.nav_btn.setObjectName("NAV")
         self.robot_btn = QPushButton("로봇\n호출")
         self.robot_btn.setObjectName("Robot")
-
         right_layout = QVBoxLayout()
         right_layout.addWidget(self.nav_btn)
         right_layout.addWidget(self.robot_btn)
         main_layout = QHBoxLayout(self)
         main_layout.addWidget(self.map_viewer)
         main_layout.addLayout(right_layout)
-        
         self.setWindowTitle("ODIGA")
         self.setFocusPolicy(Qt.StrongFocus)
         self.load_stylesheet('stylesheet.qss')
@@ -111,6 +101,7 @@ class IndoorPositioningApp(QWidget):
         self.setFocus()
 
     def _connect_signals(self):
+        # ... (기존 시그널 연결)
         self.ble_scanner_thread.detected.connect(self._on_ble_device_detected)
         if self.serial_reader:
             self.serial_reader.heading_received.connect(self._on_yaw_update)
@@ -118,22 +109,34 @@ class IndoorPositioningApp(QWidget):
         self.nav_btn.clicked.connect(self._show_selection_dialog)
         shortcut = QShortcut(QKeySequence("G"), self)
         shortcut.activated.connect(self._start_ble_scan)
+        
+        # UDP 타이머의 timeout 신호를 UDP 전송 함수에 연결
+        self.udp_send_timer.timeout.connect(self._send_position_udp)
 
     def _start_timers(self):
+        # 기존 RSSI 캐시 클리어 타이머
         self.rssi_clear_timer = QTimer(self)
         self.rssi_clear_timer.timeout.connect(self._clear_rssi_cache)
         self.rssi_clear_timer.start(2000)
 
+        # --- ▼ 2. UDP 전송을 위한 타이머 시작 ▼ ---
+        self.udp_send_timer.start(1000) # 1000ms = 1초
+
+    # --- ▼ 3. 1초마다 UDP로 좌표를 전송하는 함수 ▼ ---
+    def _send_position_udp(self):
+        """현재 융합된 좌표(fused_pos)를 UDP로 전송합니다."""
+        # 메시지 형식: "x:10.52,y:20.31"
+        message = f"x:{self.fused_pos[0]:.2f},y:{self.fused_pos[1]:.2f}"
+        self.udp_socket.sendto(message.encode(), (self.udp_target_ip, self.udp_target_port))
+        print(f"UDP Sent: {message} to {self.udp_target_ip}:{self.udp_target_port}") # 전송 확인용 로그
+
+    # ... (토스트 알림 및 경로 업데이트 로직은 이전과 동일)
     def _show_toast(self, message, duration=3000):
         self.toast_label.setText(message)
         self.toast_label.adjustSize()
         self._update_toast_position()
         self.toast_label.show()
-        
-        # --- ▼ 여기가 핵심 수정 사항 ▼ ---
-        # toast_label을 다른 모든 위젯들보다 맨 위로 올립니다.
         self.toast_label.raise_()
-        
         QTimer.singleShot(duration, self.toast_label.hide)
 
     def _update_toast_position(self):
@@ -175,14 +178,16 @@ class IndoorPositioningApp(QWidget):
             self.fused_pos = self.ekf.get_state()[:2]
             self.map_viewer.mark_estimated_position(*self.fused_pos, self.current_yaw)
             self._update_navigation_path()
-            self._send_position_udp()
+            # --- ▼ 4. 기존 UDP 전송 호출 제거 ▼ ---
+            # self._send_position_udp() # 삭제
 
     def _on_speed_update(self, speed):
         self.current_speed = speed
         self.ekf.predict(self.current_yaw, self.current_speed)
         self.fused_pos = self.ekf.get_state()[:2]
         self._update_navigation_path()
-        self._send_position_udp()
+        # --- ▼ 4. 기존 UDP 전송 호출 제거 ▼ ---
+        # self._send_position_udp() # 삭제
 
     def _on_yaw_update(self, yaw):
         self.current_yaw = yaw
@@ -194,6 +199,7 @@ class IndoorPositioningApp(QWidget):
         self.rssi_mutex.unlock()
 
     def _show_selection_dialog(self):
+        # ... (이전과 동일)
         dialog = SelectionDialog(self)
         if dialog.exec():
             selected = dialog.selected_room
@@ -207,11 +213,13 @@ class IndoorPositioningApp(QWidget):
             self.map_viewer.draw_path(None)
             
     def _start_ble_scan(self):
+        # ... (이전과 동일)
         if not self.ble_scanner_thread.isRunning():
             self.ble_scanner_thread.start()
             print("BLE Scan Started.")
     
     def load_stylesheet(self, filename):
+        # ... (이전과 동일)
         qss_file = QFile(filename)
         if qss_file.open(QFile.ReadOnly | QFile.Text):
             self.setStyleSheet(QTextStream(qss_file).readAll())
@@ -219,11 +227,13 @@ class IndoorPositioningApp(QWidget):
             print(f"'{filename}' 스타일시트 로드 실패!")
 
     def meters_to_grid(self, pos_m):
+        # ... (이전과 동일)
         row = int(pos_m[1] * self.config['px_per_m_y'] / self.BLOCK_SIZE)
         col = int(pos_m[0] * self.config['px_per_m_x'] / self.BLOCK_SIZE)
         return (row, col)
 
     def grid_to_pixels(self, pos_grid):
+        # ... (이전과 동일)
         px = pos_grid[1] * self.BLOCK_SIZE + self.BLOCK_SIZE / 2
         py = pos_grid[0] * self.BLOCK_SIZE + self.BLOCK_SIZE / 2
         return QPointF(px, py)
