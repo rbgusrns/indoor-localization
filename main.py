@@ -56,7 +56,7 @@ class IndoorPositioningApp(QWidget):
 
     def _init_logic_components(self):
         self.binary_grid = create_binary_map(self.config['map_file'], block_size=self.BLOCK_SIZE)
-        if self.binary_grid: self.distance_map, self.max_dist = create_distance_map(self.binary_grid)
+        if self.binary_grid is not None: self.distance_map, self.max_dist = create_distance_map(self.binary_grid)
         else: self.close()
         self.ekf = EKF(self.config.get('ekf_dt', 1.0))
         self.fingerprint_db = FingerprintDB(); self.fingerprint_db.load(self.config.get('fingerprint_db_path', 'fingerprint_db.json'))
@@ -95,15 +95,11 @@ class IndoorPositioningApp(QWidget):
         arrival_layout.setContentsMargins(20, 20, 20, 20); arrival_layout.setSpacing(15); arrival_layout.setAlignment(Qt.AlignCenter)
         
         message_layout = QHBoxLayout(); message_layout.setSpacing(15); message_layout.setAlignment(Qt.AlignCenter)
-
-        icon_label = QLabel()
-        icon = self.style().standardIcon(QApplication.style().SP_MessageBoxInformation)
-        icon_label.setPixmap(icon.pixmap(50, 50))
         
         message_label = QLabel("로봇이 도착했습니다.<br>진료실로 이동하시겠습니까?")
         message_label.setAlignment(Qt.AlignCenter)
 
-        message_layout.addWidget(icon_label); message_layout.addWidget(message_label)
+        message_layout.addWidget(message_label)
 
         self.confirm_move_btn = QPushButton("확인"); self.confirm_move_btn.setObjectName("ConfirmMoveButton")
 
@@ -167,6 +163,8 @@ class IndoorPositioningApp(QWidget):
             distance = np.sqrt((user_px - px)**2 + (user_py - py)**2)
             
             if distance < 50:
+                self.udp_send_timer.stop()
+                
                 self.robot_status_widget.hide()
                 self.arrival_prompt_widget.adjustSize()
                 self._update_popup_position(self.arrival_prompt_widget)
@@ -199,23 +197,17 @@ class IndoorPositioningApp(QWidget):
     def _update_navigation_path(self):
         if not self.target_room: return
 
-        # --- ▼▼▼ 추가된 코드 시작 ▼▼▼ ---
-        # 1. 현재 위치(미터)와 목표 위치(미터)를 픽셀 좌표로 변환합니다.
         user_px = self.fused_pos[0] * self.config['px_per_m_x']
         user_py = self.fused_pos[1] * self.config['px_per_m_y']
         target_px = self.target_room[0] * self.config['px_per_m_x']
         target_py = self.target_room[1] * self.config['px_per_m_y']
 
-        # 2. 두 픽셀 좌표 사이의 유클리드 거리를 계산합니다.
         distance = np.sqrt((user_px - target_px)**2 + (user_py - target_py)**2)
 
-        # 3. 거리가 50픽셀 미만이면 도착으로 간주하고 안내를 종료합니다.
         if distance < 50:
             self._stop_navigation("<b>목적지에 도착했습니다.</b> 안내를 종료합니다.")
-            return  # 경로를 더 이상 업데이트하지 않고 함수를 빠져나갑니다.
-        # --- ▲▲▲ 추가된 코드 종료 ▲▲▲ ---
-
-        # 기존 경로 탐색 및 그리기 로직 (수정 없음)
+            return 
+            
         start_m, end_m = self.fused_pos, self.target_room
         start_grid, end_grid = self.meters_to_grid(start_m), self.meters_to_grid(end_m)
         if self.last_start_grid == start_grid: return
@@ -274,9 +266,18 @@ class IndoorPositioningApp(QWidget):
 
     def _on_arrival_confirmed(self):
         self.arrival_prompt_widget.hide()
-        if self.udp_send_timer.isActive():
-            self.udp_send_timer.stop()
-        
+
+        destination_name = "진료실" 
+        if destination_name in self.room_coords:
+            dest_m = self.room_coords[destination_name]
+            dest_px = dest_m[0] * self.config['px_per_m_x']
+            dest_py = dest_m[1] * self.config['px_per_m_y']
+            message = f"{int(dest_px)},{int(dest_py)}"
+            self.udp_socket.sendto(message.encode(), (self.udp_target_ip, self.udp_target_port))
+            print(f"UDP Sent to Robot: Destination '{destination_name}' at {message}")
+        else:
+            print(f"오류: 설정 파일에서 '{destination_name}'의 좌표를 찾을 수 없습니다.")
+
         self.navigation_status_widget.adjustSize()
         self._update_popup_position(self.navigation_status_widget)
         self.navigation_status_widget.show()
@@ -290,13 +291,7 @@ class IndoorPositioningApp(QWidget):
         self._show_toast(message)
 
     def _on_navigation_cancel_clicked(self):
-        # 기존 로직 대신 새로 만든 함수를 호출하도록 변경합니다.
-        self._stop_navigation("길안내를 취소했습니다.")        
-    def _on_navigation_cancel_clicked(self):
-        self.navigation_status_widget.hide()
-        self.target_room = None
-        self.map_viewer.draw_path(None)
-        self._show_toast("길안내를 취소했습니다.")
+        self._stop_navigation("길안내를 취소했습니다.")
 
     def _on_robot_message_received(self, message):
         print(f"로봇으로부터 메시지 수신: '{message}'")
