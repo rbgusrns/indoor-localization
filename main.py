@@ -67,7 +67,7 @@ class IndoorPositioningApp(QWidget):
             self.serial_reader = SerialReader(port=imu_port, baudrate=baudrate); self.serial_reader.start()
         except serial.SerialException as e: print(f"시리얼 포트 오류: {e}."); self.serial_reader = None
         
-        self.robot_tracker = RobotTrackerThread(port=self.config.get('robot_udp_port', 5006))
+        self.robot_tracker = RobotTrackerThread(port=self.config.get('robot_udp_port', 5005))
 
     def _init_ui(self):
         self.toast_label = QLabel(self); self.toast_label.setObjectName("Toast"); self.toast_label.setAlignment(Qt.AlignCenter); self.toast_label.hide()
