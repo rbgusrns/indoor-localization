@@ -147,3 +147,38 @@ QWidget {
     background-color: #e74c3c;
     color: white;
 }
+
+#SelectionDialog {
+    background-color: #34495e; /* 메인 팝업창과 유사한 배경색 */
+    border: 1px solid #7f8c8d;
+    border-radius: 20px;
+}
+
+#SelectionDialog QLabel {
+    color: white;
+    font-size: 32px;
+    font-weight: bold;
+    padding: 15px;
+}
+
+/* property 'class'가 'dialog_button'인 QPushButton에 스타일 적용 */
+#SelectionDialog QPushButton[class="dialog_button"] {
+    background-color: #2c3e50; /* 기본 배경색 */
+    color: #ecf0f1;
+    font-size: 28px;
+    font-weight: bold;
+    border: 1px solid #4a627a;
+    border-radius: 15px;
+    padding: 20px 40px;
+    margin: 0px 20px; /* 좌우 여백 */
+    min-width: 250px;
+}
+
+#SelectionDialog QPushButton[class="dialog_button"]:hover {
+    background-color: #3498db; /* 마우스를 올리면 파란색으로 변경 */
+    border: 1px solid #5dade2;
+}
+
+#SelectionDialog QPushButton[class="dialog_button"]:pressed {
+    background-color: #2980b9; /* 클릭 시 더 어두운 파란색 */
+}
