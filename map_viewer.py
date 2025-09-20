@@ -134,7 +134,7 @@ class MapViewer(QGraphicsView):
         """로봇 마커를 처음 생성하고 초기화합니다."""
         radius = 10
         self.robot_marker = QGraphicsEllipseItem(-radius, -radius, radius*2, radius*2)
-        self.robot_marker.setBrush(QColor("#3498db")) # 파란색
+        self.robot_marker.setBrush(QColor("#9d26ff")) # 보라색
         self.robot_marker.setPen(QPen(QColor(Qt.white), 2))
         self.robot_marker.setZValue(18)
         self.scene.addItem(self.robot_marker)

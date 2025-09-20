@@ -69,12 +69,10 @@ class IndoorPositioningApp(QWidget):
         
         self.robot_tracker = RobotTrackerThread(port=self.config.get('robot_udp_port', 5005))
 
-# IndoorPositioningApp 클래스의 _init_ui 메서드 내부를 수정하세요.
-
     def _init_ui(self):
         self.toast_label = QLabel(self); self.toast_label.setObjectName("Toast"); self.toast_label.setAlignment(Qt.AlignCenter); self.toast_label.hide()
         
-        # 로봇 호출 상태 위젯 (기존과 동일)
+        # 로봇 호출 상태 위젯
         self.robot_status_widget = QWidget(self)
         self.robot_status_widget.setObjectName("RobotStatus")
         self.robot_status_widget.hide()
@@ -88,49 +86,49 @@ class IndoorPositioningApp(QWidget):
         shadow = QGraphicsDropShadowEffect(); shadow.setBlurRadius(25); shadow.setColor(QColor(0, 0, 0, 80)); shadow.setOffset(0, 4)
         self.robot_status_widget.setGraphicsEffect(shadow)
 
-        # --- ▼▼▼ 로봇 도착 확인 위젯 수정 시작 ▼▼▼ ---
+        # 로봇 도착 확인 위젯
         self.arrival_prompt_widget = QWidget(self)
         self.arrival_prompt_widget.setObjectName("ArrivalPrompt")
         self.arrival_prompt_widget.hide()
 
-        # 전체 레이아웃을 세로(VBox)로 변경
         arrival_layout = QVBoxLayout(self.arrival_prompt_widget)
-        arrival_layout.setContentsMargins(20, 20, 20, 20) # 여백 조정
-        arrival_layout.setSpacing(15) # 위젯 간 간격 조정
-        arrival_layout.setAlignment(Qt.AlignCenter) # 중앙 정렬
+        arrival_layout.setContentsMargins(20, 20, 20, 20); arrival_layout.setSpacing(15); arrival_layout.setAlignment(Qt.AlignCenter)
+        
+        message_layout = QHBoxLayout(); message_layout.setSpacing(15); message_layout.setAlignment(Qt.AlignCenter)
 
-        # 아이콘과 메시지를 담을 가로(HBox) 레이아웃 생성
-        message_layout = QHBoxLayout()
-        message_layout.setSpacing(15)
-        message_layout.setAlignment(Qt.AlignCenter)
-
-        # 정보 아이콘 추가
         icon_label = QLabel()
-        # PyQt5의 기본 제공 아이콘(Information) 사용
         icon = self.style().standardIcon(QApplication.style().SP_MessageBoxInformation)
-        icon_label.setPixmap(icon.pixmap(50, 50)) # 아이콘 크기 설정
+        icon_label.setPixmap(icon.pixmap(50, 50))
         
         message_label = QLabel("로봇이 도착했습니다.<br>진료실로 이동하시겠습니까?")
-        message_label.setAlignment(Qt.AlignCenter) # 텍스트 중앙 정렬
+        message_label.setAlignment(Qt.AlignCenter)
 
-        message_layout.addWidget(icon_label)
-        message_layout.addWidget(message_label)
+        message_layout.addWidget(icon_label); message_layout.addWidget(message_label)
 
-        self.confirm_move_btn = QPushButton("확인")
-        self.confirm_move_btn.setObjectName("ConfirmMoveButton")
+        self.confirm_move_btn = QPushButton("확인"); self.confirm_move_btn.setObjectName("ConfirmMoveButton")
 
-        # 메인 세로 레이아웃에 추가
         arrival_layout.addLayout(message_layout)
         arrival_layout.addWidget(self.confirm_move_btn, alignment=Qt.AlignCenter)
-
-        # 동일한 그림자 효과 적용
-        arrival_shadow = QGraphicsDropShadowEffect()
-        arrival_shadow.setBlurRadius(25)
-        arrival_shadow.setColor(QColor(0, 0, 0, 80))
-        arrival_shadow.setOffset(0, 4)
+        
+        arrival_shadow = QGraphicsDropShadowEffect(); arrival_shadow.setBlurRadius(25); arrival_shadow.setColor(QColor(0, 0, 0, 80)); arrival_shadow.setOffset(0, 4)
         self.arrival_prompt_widget.setGraphicsEffect(arrival_shadow)
-        # --- ▲▲▲ 로봇 도착 확인 위젯 수정 끝 ▲▲▲ ---
 
+        # 길안내 상태 위젯
+        self.navigation_status_widget = QWidget(self)
+        self.navigation_status_widget.setObjectName("NavigationStatus")
+        self.navigation_status_widget.hide()
+
+        nav_layout = QHBoxLayout(self.navigation_status_widget)
+        nav_layout.setContentsMargins(25, 10, 25, 10); nav_layout.setSpacing(20)
+        
+        nav_layout.addWidget(QLabel("길안내중입니다..."))
+        self.cancel_nav_btn = QPushButton("취소"); self.cancel_nav_btn.setObjectName("CancelNavButton")
+        nav_layout.addWidget(self.cancel_nav_btn)
+
+        nav_shadow = QGraphicsDropShadowEffect(); nav_shadow.setBlurRadius(25); nav_shadow.setColor(QColor(0, 0, 0, 80)); nav_shadow.setOffset(0, 4)
+        self.navigation_status_widget.setGraphicsEffect(nav_shadow)
+
+        # 메인 레이아웃
         self.map_viewer = MapViewer(self.config['map_file'], self.config['px_per_m_x'], self.config['px_per_m_y'])
         self.map_viewer._init_est_items(0, 0, 180.0)
         self.nav_btn = QPushButton("길안내"); self.nav_btn.setObjectName("NAV")
@@ -140,6 +138,7 @@ class IndoorPositioningApp(QWidget):
         main_layout = QHBoxLayout(self); main_layout.addWidget(self.map_viewer); main_layout.addLayout(right_layout)
         
         self.setWindowTitle("ODIGA"); self.setFocusPolicy(Qt.StrongFocus); self.load_stylesheet('stylesheet.qss'); self.showFullScreen(); self.setFocus()
+
     def _connect_signals(self):
         self.ble_scanner_thread.detected.connect(self._on_ble_device_detected)
         if self.serial_reader:
@@ -148,7 +147,8 @@ class IndoorPositioningApp(QWidget):
         self.nav_btn.clicked.connect(self._show_selection_dialog)
         self.robot_btn.clicked.connect(self._on_robot_call_clicked)
         self.stop_call_btn.clicked.connect(self._on_robot_call_stop_clicked)
-        self.confirm_move_btn.clicked.connect(self._on_arrival_confirmed) # 새로 추가된 버튼 시그널 연결
+        self.confirm_move_btn.clicked.connect(self._on_arrival_confirmed)
+        self.cancel_nav_btn.clicked.connect(self._on_navigation_cancel_clicked)
         shortcut = QShortcut(QKeySequence("G"), self); shortcut.activated.connect(self._start_ble_scan)
         self.udp_send_timer.timeout.connect(self._send_position_udp)
         self.udp_receiver.message_received.connect(self._on_robot_message_received)
@@ -160,13 +160,10 @@ class IndoorPositioningApp(QWidget):
         self.robot_tracker.start()
 
     def _on_robot_position_update(self, px, py):
-        """로봇 트래커로부터 받은 픽셀 좌표로 지도 위 로봇 위치를 업데이트하고, 사용자와의 거리를 확인합니다."""
         self.map_viewer.update_robot_position(px, py)
         
-        # 로봇 호출이 활성화 상태이고, "로봇이 오고 있습니다" 창이 보일 때만 거리 계산
         if self.udp_send_timer.isActive() and self.robot_status_widget.isVisible():
-            user_px = self.fused_pos[0] * self.config['px_per_m_x']
-            user_py = self.fused_pos[1] * self.config['px_per_m_y']
+            user_px, user_py = self.fused_pos[0] * self.config['px_per_m_x'], self.fused_pos[1] * self.config['px_per_m_y']
             distance = np.sqrt((user_px - px)**2 + (user_py - py)**2)
             
             if distance < 50:
@@ -196,7 +193,8 @@ class IndoorPositioningApp(QWidget):
         super().resizeEvent(event)
         self._update_popup_position(self.toast_label)
         self._update_popup_position(self.robot_status_widget)
-        self._update_popup_position(self.arrival_prompt_widget) # 추가: 새 위젯 위치 업데이트
+        self._update_popup_position(self.arrival_prompt_widget)
+        self._update_popup_position(self.navigation_status_widget)
 
     def _update_navigation_path(self):
         if not self.target_room: return
@@ -251,23 +249,35 @@ class IndoorPositioningApp(QWidget):
     def _on_robot_call_stop_clicked(self):
         if self.udp_send_timer.isActive():
             self.udp_send_timer.stop()
-            self.robot_status_widget.hide()
-            self.arrival_prompt_widget.hide() # 추가: 도착 프롬프트도 숨김
-            self._show_toast("로봇 호출을 중지했습니다.")
+        self.robot_status_widget.hide()
+        self.arrival_prompt_widget.hide()
+        self.navigation_status_widget.hide()
+        self._show_toast("로봇 호출을 중지했습니다.")
 
     def _on_arrival_confirmed(self):
-        """'진료실로 이동' 확인 버튼 클릭 시 호출 (새로 추가된 메서드)"""
         self.arrival_prompt_widget.hide()
         if self.udp_send_timer.isActive():
             self.udp_send_timer.stop()
-        self._show_toast("로봇을 따라 이동하세요.")
+        
+        self.navigation_status_widget.adjustSize()
+        self._update_popup_position(self.navigation_status_widget)
+        self.navigation_status_widget.show()
+        self.navigation_status_widget.raise_()
+        
+    def _on_navigation_cancel_clicked(self):
+        self.navigation_status_widget.hide()
+        self.target_room = None
+        self.map_viewer.draw_path(None)
+        self._show_toast("길안내를 취소했습니다.")
 
     def _on_robot_message_received(self, message):
         print(f"로봇으로부터 메시지 수신: '{message}'")
         if message == "1":
             self.robot_status_widget.hide()
-            self.arrival_prompt_widget.hide() # 추가: 도착 프롬프트도 숨김
-            self.udp_send_timer.stop()
+            self.arrival_prompt_widget.hide()
+            self.navigation_status_widget.hide()
+            if self.udp_send_timer.isActive():
+                self.udp_send_timer.stop()
             self._show_toast("로봇이 도착했습니다.")
 
     def load_stylesheet(self, filename):
