@@ -17,7 +17,7 @@ from serial_reader import SerialReader
 from event import SelectionDialog
 from bin import create_binary_map
 from Astar import find_path, create_distance_map
-from robot_tracker import RobotTrackerThread
+from robot_viewer import RobotTrackerThread
 
 # --- UDP 수신 스레드 클래스 ---
 class UDPReceiverThread(QThread):
@@ -72,23 +72,34 @@ class IndoorPositioningApp(QWidget):
     def _init_ui(self):
         self.toast_label = QLabel(self); self.toast_label.setObjectName("Toast"); self.toast_label.setAlignment(Qt.AlignCenter); self.toast_label.hide()
         
+        # 로봇 호출 상태 위젯
         self.robot_status_widget = QWidget(self)
         self.robot_status_widget.setObjectName("RobotStatus")
         self.robot_status_widget.hide()
 
         status_layout = QHBoxLayout(self.robot_status_widget)
-        status_layout.setContentsMargins(25, 10, 25, 10)
-        status_layout.setSpacing(20)
-
-        status_text = QLabel("로봇이 오고 있습니다...")
-        self.stop_call_btn = QPushButton("중지")
-        self.stop_call_btn.setObjectName("StopCallButton")
-
-        status_layout.addWidget(status_text)
+        status_layout.setContentsMargins(25, 10, 25, 10); status_layout.setSpacing(20)
+        status_layout.addWidget(QLabel("로봇이 오고 있습니다..."))
+        self.stop_call_btn = QPushButton("중지"); self.stop_call_btn.setObjectName("StopCallButton")
         status_layout.addWidget(self.stop_call_btn)
 
         shadow = QGraphicsDropShadowEffect(); shadow.setBlurRadius(25); shadow.setColor(QColor(0, 0, 0, 80)); shadow.setOffset(0, 4)
         self.robot_status_widget.setGraphicsEffect(shadow)
+
+        # 로봇 도착 확인 위젯 (새로 추가)
+        self.arrival_prompt_widget = QWidget(self)
+        self.arrival_prompt_widget.setObjectName("ArrivalPrompt") # QSS 스타일링을 위해 다른 이름 부여
+        self.arrival_prompt_widget.hide()
+
+        arrival_layout = QHBoxLayout(self.arrival_prompt_widget)
+        arrival_layout.setContentsMargins(25, 10, 25, 10); arrival_layout.setSpacing(20)
+        arrival_layout.addWidget(QLabel("진료실로 이동하시겠습니까?"))
+        self.confirm_move_btn = QPushButton("확인"); self.confirm_move_btn.setObjectName("ConfirmMoveButton")
+        arrival_layout.addWidget(self.confirm_move_btn)
+        
+        # 동일한 그림자 효과 적용
+        arrival_shadow = QGraphicsDropShadowEffect(); arrival_shadow.setBlurRadius(25); arrival_shadow.setColor(QColor(0, 0, 0, 80)); arrival_shadow.setOffset(0, 4)
+        self.arrival_prompt_widget.setGraphicsEffect(arrival_shadow)
 
         self.map_viewer = MapViewer(self.config['map_file'], self.config['px_per_m_x'], self.config['px_per_m_y'])
         self.map_viewer._init_est_items(0, 0, 180.0)
@@ -108,10 +119,10 @@ class IndoorPositioningApp(QWidget):
         self.nav_btn.clicked.connect(self._show_selection_dialog)
         self.robot_btn.clicked.connect(self._on_robot_call_clicked)
         self.stop_call_btn.clicked.connect(self._on_robot_call_stop_clicked)
+        self.confirm_move_btn.clicked.connect(self._on_arrival_confirmed) # 새로 추가된 버튼 시그널 연결
         shortcut = QShortcut(QKeySequence("G"), self); shortcut.activated.connect(self._start_ble_scan)
         self.udp_send_timer.timeout.connect(self._send_position_udp)
         self.udp_receiver.message_received.connect(self._on_robot_message_received)
-        
         self.robot_tracker.robot_position_updated.connect(self._on_robot_position_update)
 
     def _start_timers(self):
@@ -120,8 +131,21 @@ class IndoorPositioningApp(QWidget):
         self.robot_tracker.start()
 
     def _on_robot_position_update(self, px, py):
-        """로봇 트래커로부터 받은 픽셀 좌표로 지도 위 로봇 위치를 업데이트합니다."""
+        """로봇 트래커로부터 받은 픽셀 좌표로 지도 위 로봇 위치를 업데이트하고, 사용자와의 거리를 확인합니다."""
         self.map_viewer.update_robot_position(px, py)
+        
+        # 로봇 호출이 활성화 상태이고, "로봇이 오고 있습니다" 창이 보일 때만 거리 계산
+        if self.udp_send_timer.isActive() and self.robot_status_widget.isVisible():
+            user_px = self.fused_pos[0] * self.config['px_per_m_x']
+            user_py = self.fused_pos[1] * self.config['px_per_m_y']
+            distance = np.sqrt((user_px - px)**2 + (user_py - py)**2)
+            
+            if distance < 50:
+                self.robot_status_widget.hide()
+                self.arrival_prompt_widget.adjustSize()
+                self._update_popup_position(self.arrival_prompt_widget)
+                self.arrival_prompt_widget.show()
+                self.arrival_prompt_widget.raise_()
 
     def _send_position_udp(self):
         px, py = self.fused_pos[0] * self.config['px_per_m_x'], self.fused_pos[1] * self.config['px_per_m_y']
@@ -143,6 +167,7 @@ class IndoorPositioningApp(QWidget):
         super().resizeEvent(event)
         self._update_popup_position(self.toast_label)
         self._update_popup_position(self.robot_status_widget)
+        self._update_popup_position(self.arrival_prompt_widget) # 추가: 새 위젯 위치 업데이트
 
     def _update_navigation_path(self):
         if not self.target_room: return
@@ -198,12 +223,21 @@ class IndoorPositioningApp(QWidget):
         if self.udp_send_timer.isActive():
             self.udp_send_timer.stop()
             self.robot_status_widget.hide()
+            self.arrival_prompt_widget.hide() # 추가: 도착 프롬프트도 숨김
             self._show_toast("로봇 호출을 중지했습니다.")
+
+    def _on_arrival_confirmed(self):
+        """'진료실로 이동' 확인 버튼 클릭 시 호출 (새로 추가된 메서드)"""
+        self.arrival_prompt_widget.hide()
+        if self.udp_send_timer.isActive():
+            self.udp_send_timer.stop()
+        self._show_toast("로봇을 따라 이동하세요.")
 
     def _on_robot_message_received(self, message):
         print(f"로봇으로부터 메시지 수신: '{message}'")
         if message == "1":
             self.robot_status_widget.hide()
+            self.arrival_prompt_widget.hide() # 추가: 도착 프롬프트도 숨김
             self.udp_send_timer.stop()
             self._show_toast("로봇이 도착했습니다.")
 
