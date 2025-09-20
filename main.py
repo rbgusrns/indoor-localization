@@ -121,7 +121,7 @@ class IndoorPositioningApp(QWidget):
         nav_layout = QHBoxLayout(self.navigation_status_widget)
         nav_layout.setContentsMargins(25, 10, 25, 10); nav_layout.setSpacing(20)
         
-        nav_layout.addWidget(QLabel("길안내중입니다..."))
+        nav_layout.addWidget(QLabel("로봇을 따라가 주세요.."))
         self.cancel_nav_btn = QPushButton("취소"); self.cancel_nav_btn.setObjectName("CancelNavButton")
         nav_layout.addWidget(self.cancel_nav_btn)
 

@@ -142,8 +142,8 @@ QPushButton:hover {
     margin-top: 10px; /* 메시지와의 간격 */
 }
 #ConfirmMoveButton:hover {
-    background-color: #ffa318ff;
+    background-color: #ffa318;
 }
 #ConfirmMoveButton:pressed {
-    background-color: #cf891fff;
+    background-color: #cf891f;
 }
