@@ -3,6 +3,8 @@ import serial
 import time
 import numpy as np
 import socket
+# ▼ math 라이브러리 추가
+import math
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QShortcut, QLabel, QGraphicsDropShadowEffect
 from PyQt5.QtCore import QTimer, QMutex, Qt, QFile, QTextStream, QPointF, QThread, pyqtSignal
 from PyQt5.QtGui import QKeySequence, QColor
@@ -17,7 +19,7 @@ from serial_reader import SerialReader
 from event import SelectionDialog
 from bin import create_binary_map
 from Astar import find_path, create_distance_map
-from robot_viewer import RobotTrackerThread
+from robot_tracker import RobotTrackerThread
 
 # --- UDP 수신 스레드 클래스 ---
 class UDPReceiverThread(QThread):
@@ -52,6 +54,11 @@ class IndoorPositioningApp(QWidget):
         self.udp_target_port = self.config.get('udp_target_port', 5005)
         self.udp_socket, self.udp_send_timer = socket.socket(socket.AF_INET, socket.SOCK_DGRAM), QTimer(self)
         self.udp_receiver = UDPReceiverThread(port=self.config.get('udp_listen_port', 5005))
+        
+        # ▼ 로봇 상태 저장을 위한 변수 추가
+        self.robot_pixel_pos = None # 로봇의 현재 픽셀 좌표
+        self.is_robot_arrived = False # 로봇 도착 여부 플래그
+        
         self._init_logic_components(); self._init_ui(); self._connect_signals(); self._start_timers()
 
     def _init_logic_components(self):
@@ -67,7 +74,7 @@ class IndoorPositioningApp(QWidget):
             self.serial_reader = SerialReader(port=imu_port, baudrate=baudrate); self.serial_reader.start()
         except serial.SerialException as e: print(f"시리얼 포트 오류: {e}."); self.serial_reader = None
         
-        self.robot_tracker = RobotTrackerThread(port=self.config.get('robot_udp_port', 5005))
+        self.robot_tracker = RobotTrackerThread(port=self.config.get('robot_udp_port', 5006))
 
     def _init_ui(self):
         self.toast_label = QLabel(self); self.toast_label.setObjectName("Toast"); self.toast_label.setAlignment(Qt.AlignCenter); self.toast_label.hide()
@@ -80,12 +87,13 @@ class IndoorPositioningApp(QWidget):
         status_layout.setContentsMargins(25, 10, 25, 10)
         status_layout.setSpacing(20)
 
-        status_text = QLabel("로봇이 오고 있습니다...")
-        self.stop_call_btn = QPushButton("중지")
-        self.stop_call_btn.setObjectName("StopCallButton")
+        # ▼ 위젯 내부 요소를 멤버 변수로 만들어 다른 함수에서 접근 가능하게 변경
+        self.robot_status_label = QLabel("로봇이 오고 있습니다...")
+        self.robot_action_btn = QPushButton("중지")
+        self.robot_action_btn.setObjectName("StopCallButton")
 
-        status_layout.addWidget(status_text)
-        status_layout.addWidget(self.stop_call_btn)
+        status_layout.addWidget(self.robot_status_label)
+        status_layout.addWidget(self.robot_action_btn)
 
         shadow = QGraphicsDropShadowEffect(); shadow.setBlurRadius(25); shadow.setColor(QColor(0, 0, 0, 80)); shadow.setOffset(0, 4)
         self.robot_status_widget.setGraphicsEffect(shadow)
@@ -107,11 +115,11 @@ class IndoorPositioningApp(QWidget):
             self.serial_reader.speed_received.connect(self._on_speed_update)
         self.nav_btn.clicked.connect(self._show_selection_dialog)
         self.robot_btn.clicked.connect(self._on_robot_call_clicked)
-        self.stop_call_btn.clicked.connect(self._on_robot_call_stop_clicked)
+        # ▼ 버튼 이름을 self.robot_action_btn 으로 변경
+        self.robot_action_btn.clicked.connect(self._on_robot_call_stop_clicked)
         shortcut = QShortcut(QKeySequence("G"), self); shortcut.activated.connect(self._start_ble_scan)
         self.udp_send_timer.timeout.connect(self._send_position_udp)
         self.udp_receiver.message_received.connect(self._on_robot_message_received)
-        
         self.robot_tracker.robot_position_updated.connect(self._on_robot_position_update)
 
     def _start_timers(self):
@@ -119,9 +127,80 @@ class IndoorPositioningApp(QWidget):
         self.udp_receiver.start()
         self.robot_tracker.start()
 
+    # ▼ --- 신규 및 수정된 함수들 ---
+    
+    def _check_proximity(self):
+        """사용자와 로봇의 거리를 확인하고, 가까우면 UI를 변경합니다."""
+        if self.robot_pixel_pos is None or self.is_robot_arrived or not self.robot_status_widget.isVisible():
+            return
+
+        # 사용자 현재 위치를 픽셀로 변환
+        user_px = self.fused_pos[0] * self.config['px_per_m_x']
+        user_py = self.fused_pos[1] * self.config['px_per_m_y']
+        
+        # 로봇과 사용자 사이의 거리 계산
+        distance = math.dist((user_px, user_py), self.robot_pixel_pos)
+
+        # 거리가 50픽셀 이내이면 상태 변경
+        if distance <= 50:
+            self.is_robot_arrived = True
+            print("로봇 도착! UI를 변경합니다.")
+            self._transform_robot_status_widget()
+    
+    def _transform_robot_status_widget(self):
+        """로봇 상태 위젯을 '도착' 상태로 변경합니다."""
+        self.robot_status_label.setText("진료실로 이동하시겠습니까?")
+        
+        # 기존 '중지' 버튼의 연결을 끊고 '확인' 기능으로 변경
+        self.robot_action_btn.setText("확인")
+        try:
+            self.robot_action_btn.clicked.disconnect(self._on_robot_call_stop_clicked)
+        except TypeError:
+            pass # 이미 연결이 끊겨있으면 무시
+        self.robot_action_btn.clicked.connect(self._on_arrival_confirmed)
+        
+        # 위젯 배경색 변경 (스타일시트 직접 적용)
+        self.robot_status_widget.setStyleSheet("""
+            #RobotStatus {
+                background-color: #27ae60; /* 초록색 계열 */
+                border-radius: 20px;
+            }
+        """)
+        self.robot_status_widget.adjustSize()
+        self._update_popup_position(self.robot_status_widget)
+
+    def _reset_robot_status_widget(self):
+        """로봇 상태 위젯을 '호출 중' 기본 상태로 되돌립니다."""
+        self.robot_status_label.setText("로봇이 오고 있습니다...")
+        self.robot_action_btn.setText("중지")
+        
+        try:
+            self.robot_action_btn.clicked.disconnect(self._on_arrival_confirmed)
+        except TypeError:
+            pass
+        self.robot_action_btn.clicked.connect(self._on_robot_call_stop_clicked)
+        
+        # 위젯 배경색 원래대로 (qss 파일에 정의된 스타일을 따르도록 초기화)
+        self.robot_status_widget.setStyleSheet("")
+        self.is_robot_arrived = False
+        self.robot_pixel_pos = None
+
+    def _on_arrival_confirmed(self):
+        """'확인' 버튼을 눌렀을 때의 동작"""
+        self._show_toast("알겠습니다. 안내를 종료합니다.")
+        self.robot_status_widget.hide()
+        # 로봇 호출 관련 상태 초기화
+        if self.udp_send_timer.isActive():
+            self.udp_send_timer.stop()
+        self._reset_robot_status_widget()
+
     def _on_robot_position_update(self, px, py):
         """로봇 트래커로부터 받은 픽셀 좌표로 지도 위 로봇 위치를 업데이트합니다."""
+        self.robot_pixel_pos = (px, py) # 로봇 위치 저장
         self.map_viewer.update_robot_position(px, py)
+        self._check_proximity() # 거리 확인
+
+    # ▲ --- 신규 및 수정된 함수들 ---
 
     def _send_position_udp(self):
         px, py = self.fused_pos[0] * self.config['px_per_m_x'], self.fused_pos[1] * self.config['px_per_m_y']
@@ -160,6 +239,7 @@ class IndoorPositioningApp(QWidget):
             pts, _, _ = self.fingerprint_db.get_position(local_rssi_copy, k=self.config['k_neighbors'])
             self.ekf.update(np.array([pts[0], pts[1]])); self.fused_pos = self.ekf.get_state()[:2]
             self.map_viewer.mark_estimated_position(*self.fused_pos, self.current_yaw); self._update_navigation_path()
+            self._check_proximity() # ▼ 사용자 위치 업데이트 시에도 거리 확인
 
     def _on_speed_update(self, speed):
         self.current_speed = speed; self.ekf.predict(self.current_yaw, self.current_speed); self.fused_pos = self.ekf.get_state()[:2]
@@ -187,6 +267,8 @@ class IndoorPositioningApp(QWidget):
     def _on_robot_call_clicked(self):
         if not self.udp_send_timer.isActive():
             self.udp_send_timer.start(1000)
+            
+            self._reset_robot_status_widget() # ▼ 위젯 상태 초기화
             self.robot_status_widget.adjustSize()
             self._update_popup_position(self.robot_status_widget)
             self.robot_status_widget.show(); self.robot_status_widget.raise_()
@@ -199,6 +281,7 @@ class IndoorPositioningApp(QWidget):
             self.udp_send_timer.stop()
             self.robot_status_widget.hide()
             self._show_toast("로봇 호출을 중지했습니다.")
+            self._reset_robot_status_widget() # ▼ 상태 초기화
 
     def _on_robot_message_received(self, message):
         print(f"로봇으로부터 메시지 수신: '{message}'")
