@@ -163,7 +163,7 @@ QWidget {
 
 /* property 'class'가 'dialog_button'인 QPushButton에 스타일 적용 */
 #SelectionDialog QPushButton[class="dialog_button"] {
-    background-color: #34b3fd; /* 기본 배경색 */
+    background-color: #3498db; /* 기본 배경색 */
     color: #ecf0f1;
     font-size: 28px;
     font-weight: bold;
