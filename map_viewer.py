@@ -1,8 +1,8 @@
 import sys
+import math
 from PyQt5.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, QGraphicsEllipseItem, QGraphicsPolygonItem
 from PyQt5.QtGui import QPainter, QPen, QBrush, QPixmap, QPolygonF, QColor, QPainterPath
-from PyQt5.QtCore import Qt, QRectF, QPointF, QTimer,  QPropertyAnimation, QEasingCurve
-import math
+from PyQt5.QtCore import Qt, QRectF, QPointF, QTimer, QVariantAnimation, QEasingCurve, QAbstractAnimation
 
 class MapViewer(QGraphicsView):
     """
@@ -37,13 +37,18 @@ class MapViewer(QGraphicsView):
         self.robot_marker = None
 
     def _start_animation(self, target_item, end_pos, duration=300):
-        """QPropertyAnimation을 사용해 target_item을 부드럽게 이동시키는 공통 함수"""
-        animation = QPropertyAnimation(target_item, b"pos", self) # 'pos' 속성을 애니메이션 대상으로 지정
+        """QVariantAnimation을 사용해 target_item을 부드럽게 이동시키는 공통 함수"""
+        animation = QVariantAnimation(self)
+        animation.setStartValue(target_item.pos())
+        animation.setEndValue(end_pos)
         animation.setDuration(duration)
-        animation.setStartValue(target_item.pos()) # 현재 위치에서 시작
-        animation.setEndValue(end_pos)             # 목표 위치에서 종료
-        animation.setEasingCurve(QEasingCurve.InOutCubic) # 부드러운 가감속 효과
-        animation.start()
+        animation.setEasingCurve(QEasingCurve.InOutCubic)
+
+        # 애니메이션 값이 변할 때마다 target_item의 위치(setPos)를 업데이트하도록 연결
+        animation.valueChanged.connect(target_item.setPos)
+
+        # 애니메이션이 끝나면 자동으로 소멸되도록 설정하여 메모리 누수 방지
+        animation.start(QAbstractAnimation.DeleteWhenStopped)
 
     def _init_est_items(self, x, y, heading):
         """사용자 위치 마커와 방향 화살표를 초기화합니다."""
@@ -69,20 +74,17 @@ class MapViewer(QGraphicsView):
     def _update_arrow_and_center(self, px, py, heading):
         """방향 화살표를 업데이트하고, 화면을 해당 위치로 중앙 정렬합니다."""
         self._cur_heading = heading
-        rad = math.radians(heading)
-        size = 15
-        tip = QPointF(px + size * math.cos(rad), py + size * math.sin(rad))
-        left = QPointF(px + size*0.6*math.cos(rad+math.radians(135)), py + size*0.6*math.sin(rad+math.radians(135)))
-        right = QPointF(px + size*0.6*math.cos(rad-math.radians(135)), py + size*0.6*math.sin(rad-math.radians(135)))
         
-        # 화살표를 원점 기준으로 그린 후, 사용자 마커와 함께 이동 및 회전시킵니다.
-        # 이 방식이 더 정확하고 관리가 편합니다.
+        # 화살표 모양 정의 (원점 기준)
+        size = 15
         arrow_poly = QPolygonF([
             QPointF(size, 0),
             QPointF(size*0.2, -size*0.4),
             QPointF(size*0.2, size*0.4)
         ])
         self.heading_arrow.setPolygon(arrow_poly)
+
+        # 화살표 위치 및 회전 설정
         self.heading_arrow.setPos(px, py)
         self.heading_arrow.setRotation(heading)
 
