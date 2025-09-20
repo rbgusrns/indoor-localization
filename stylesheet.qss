@@ -147,3 +147,31 @@ QPushButton:hover {
 #ConfirmMoveButton:pressed {
     background-color: #cf891f;
 }
+
+
+#CurrentNav {
+    background-color: rgba(0, 0, 0, 0.75); /* 반투명 검은색 배경 */
+    border-radius: 18px; /* 모서리를 둥글게 */
+    color: white;
+    font-size: 16px;
+}
+
+#CurrentNav QLabel {
+    background-color: transparent; /* 라벨 배경은 투명하게 */
+    color: white;
+    padding: 5px;
+}
+
+#CurrentNavCancelButton {
+    background-color: #555555; /* 버튼 배경색 */
+    color: white;
+    font-size: 14px;
+    border: none;
+    border-radius: 12px; /* 버튼 모서리도 둥글게 */
+    padding: 6px 14px;
+    min-width: 50px;
+}
+
+#CurrentNavCancelButton:hover {
+    background-color: #c0392b; /* 마우스를 올리면 빨간색으로 변경 */
+}

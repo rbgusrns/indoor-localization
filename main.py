@@ -262,7 +262,7 @@ class IndoorPositioningApp(QWidget):
             self._show_toast(f"<b>{selected}</b>로 안내를 시작합니다.")
             self.last_start_grid = None
             self._update_navigation_path()
-            self.current_nav_label.setText(f"안내: <b>{selected}</b>")
+            self.current_nav_label.setText(f"<b>{selected}</b> 안내중")
             self.current_nav_widget.adjustSize()
             self.current_nav_widget.show()
             self.current_nav_widget.raise_()
@@ -285,7 +285,7 @@ class IndoorPositioningApp(QWidget):
                 self.target_room = self.room_coords[selected]
                 self.last_start_grid = None
                 self._update_navigation_path()
-                self.current_nav_label.setText(f"안내: <b>{selected}</b>")
+                self.current_nav_label.setText(f"<b>{selected}</b> 안내중")
                 self.current_nav_widget.adjustSize()
                 self.current_nav_widget.show()
                 self.current_nav_widget.raise_()
