@@ -152,11 +152,10 @@ class MapViewer(QGraphicsView):
         self.robot_marker.setPos(px, py)
 
     def update_robot_position(self, px, py, duration=300):
-        """지도 위에 로봇의 위치를 표시하거나 부드럽게 이동시킵니다."""
+        """지도 위에 로봇의 위치를 즉시 표시하거나 업데이트합니다 (순간이동)."""
         if self.robot_marker is None:
+            # 마커가 없으면 새로 생성하고 위치를 설정합니다.
             self._init_robot_marker(px, py)
-            return
-
-        end_pos = QPointF(px, py)
-        # 로봇 마커 이동에 공통 애니메이션 함수 사용
-        self._start_animation(self.robot_marker, end_pos, duration)
+        else:
+            # 마커가 이미 있으면 즉시 해당 위치로 이동시킵니다.
+            self.robot_marker.setPos(px, py)
