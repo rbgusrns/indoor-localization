@@ -51,13 +51,16 @@ class IndoorPositioningApp(QWidget):
         self.udp_target_ip = self.config.get('udp_target_ip', "10.24.184.20")
         self.udp_target_port = self.config.get('udp_target_port', 5005)
         self.udp_socket, self.udp_send_timer = socket.socket(socket.AF_INET, socket.SOCK_DGRAM), QTimer(self)
+        self.udp_destination_timer = QTimer(self)
         self.udp_receiver = UDPReceiverThread(port=self.config.get('udp_listen_port', 5005))
         self._init_logic_components(); self._init_ui(); self._connect_signals(); self._start_timers()
 
     def _init_logic_components(self):
         self.binary_grid = create_binary_map(self.config['map_file'], block_size=self.BLOCK_SIZE)
-        if self.binary_grid is not None: self.distance_map, self.max_dist = create_distance_map(self.binary_grid)
-        else: self.close()
+        if self.binary_grid is not None: 
+            self.distance_map, self.max_dist = create_distance_map(self.binary_grid)
+        else: 
+            self.close()
         self.ekf = EKF(self.config.get('ekf_dt', 1.0))
         self.fingerprint_db = FingerprintDB(); self.fingerprint_db.load(self.config.get('fingerprint_db_path', 'fingerprint_db.json'))
         self.ble_scanner_thread = BLEScanThread(self.config)
@@ -65,7 +68,8 @@ class IndoorPositioningApp(QWidget):
             imu_port, baudrate = self.config.get('imu_port', '/dev/ttyUSB0'), self.config.get('imu_baudrate', 115200)
             self.serial_port = serial.Serial(imu_port, baudrate); time.sleep(1); self.serial_port.write(b'ZERO\n')
             self.serial_reader = SerialReader(port=imu_port, baudrate=baudrate); self.serial_reader.start()
-        except serial.SerialException as e: print(f"시리얼 포트 오류: {e}."); self.serial_reader = None
+        except serial.SerialException as e: 
+            print(f"시리얼 포트 오류: {e}."); self.serial_reader = None
         
         self.robot_tracker = RobotTrackerThread(port=self.config.get('robot_udp_port', 5005))
 
@@ -147,6 +151,7 @@ class IndoorPositioningApp(QWidget):
         self.cancel_nav_btn.clicked.connect(self._on_navigation_cancel_clicked)
         shortcut = QShortcut(QKeySequence("G"), self); shortcut.activated.connect(self._start_ble_scan)
         self.udp_send_timer.timeout.connect(self._send_position_udp)
+        self.udp_destination_timer.timeout.connect(self._send_destination_udp)
         self.udp_receiver.message_received.connect(self._on_robot_message_received)
         self.robot_tracker.robot_position_updated.connect(self._on_robot_position_update)
 
@@ -176,6 +181,19 @@ class IndoorPositioningApp(QWidget):
         message = f"{int(px)},{int(py)}"
         self.udp_socket.sendto(message.encode(), (self.udp_target_ip, self.udp_target_port))
         print(f"UDP Sent: {message}")
+
+    def _send_destination_udp(self):
+        """설정된 목적지(target_room)의 좌표를 UDP로 전송합니다."""
+        if self.target_room:
+            dest_m = self.target_room
+            dest_px = dest_m[0] * self.config['px_per_m_x']
+            dest_py = dest_m[1] * self.config['px_per_m_y']
+            message = f"{int(dest_px)},{int(dest_py)}"
+            self.udp_socket.sendto(message.encode(), (self.udp_target_ip, self.udp_target_port))
+            print(f"UDP Destination Sent: {message}")
+        else:
+            self.udp_destination_timer.stop()
+            print("오류: 목적지가 설정되지 않아 목적지 전송을 중단합니다.")
 
     def _show_toast(self, message, duration=3000):
         self.toast_label.setText(message); self.toast_label.adjustSize()
@@ -259,6 +277,8 @@ class IndoorPositioningApp(QWidget):
     def _on_robot_call_stop_clicked(self):
         if self.udp_send_timer.isActive():
             self.udp_send_timer.stop()
+        if self.udp_destination_timer.isActive():
+            self.udp_destination_timer.stop()
         self.robot_status_widget.hide()
         self.arrival_prompt_widget.hide()
         self.navigation_status_widget.hide()
@@ -266,23 +286,7 @@ class IndoorPositioningApp(QWidget):
 
     def _on_arrival_confirmed(self):
         self.arrival_prompt_widget.hide()
-
-        if self.target_room:
-            # self.target_room은 (x, y) 미터 좌표 튜플입니다.
-            dest_m = self.target_room 
-            
-            # 미터 좌표를 픽셀 좌표로 변환합니다.
-            dest_px = dest_m[0] * self.config['px_per_m_x']
-            dest_py = dest_m[1] * self.config['px_per_m_y']
-            
-            # UDP 메시지를 생성하고 로봇에게 전송합니다.
-            message = f"{int(dest_px)},{int(dest_py)}"
-            self.udp_socket.sendto(message.encode(), (self.udp_target_ip, self.udp_target_port))
-            print(f"UDP Sent to Robot: Final Destination at {message}")
-        else:
-            print("오류: 현재 설정된 길안내 목적지가 없어 로봇에게 위치를 보낼 수 없습니다.")
-
-
+        self.udp_destination_timer.start(500)
         self.navigation_status_widget.adjustSize()
         self._update_popup_position(self.navigation_status_widget)
         self.navigation_status_widget.show()
@@ -290,6 +294,8 @@ class IndoorPositioningApp(QWidget):
         
     def _stop_navigation(self, message):
         """길안내를 중지하고 관련 UI를 정리합니다."""
+        if self.udp_destination_timer.isActive():
+            self.udp_destination_timer.stop()
         self.navigation_status_widget.hide()
         self.target_room = None
         self.map_viewer.draw_path(None)
