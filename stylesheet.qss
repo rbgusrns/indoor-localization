@@ -18,7 +18,7 @@ QWidget {
     font-size: 42px;
     font-weight: bold;
     color: white;
-    padding: 20px;
+    padding: 10px;
     border: none;
     border-radius: 25px; /* 부드러운 모서리 */
     min-height: 180px;
