@@ -131,29 +131,16 @@ class IndoorPositioningApp(QWidget):
         self.robot_tracker.start()
 
     def _on_robot_position_update(self, px, py):
+        """로봇 트래커로부터 받은 픽셀 좌표로 지도 위 로봇 위치를 업데이트하고, 사용자와의 거리를 확인합니다."""
         self.map_viewer.update_robot_position(px, py)
         
-        # [디버깅 1] 현재 상태를 무조건 출력
-        print(
-            f"로봇 위치: ({px}, {py}), "
-            f"타이머 활성: {self.udp_send_timer.isActive()}, "
-            f"상태창 표시: {self.robot_status_widget.isVisible()}"
-        )
-
+        # 로봇 호출이 활성화 상태이고, "로봇이 오고 있습니다" 창이 보일 때만 거리 계산
         if self.udp_send_timer.isActive() and self.robot_status_widget.isVisible():
             user_px = self.fused_pos[0] * self.config['px_per_m_x']
             user_py = self.fused_pos[1] * self.config['px_per_m_y']
             distance = np.sqrt((user_px - px)**2 + (user_py - py)**2)
             
-            # [디버깅 2] 계산된 좌표와 거리를 출력
-            print(
-                f"  ㄴ 거리 계산: 사용자({int(user_px)}, {int(user_py)}) "
-                f"<-> 로봇({px}, {py}) | 거리: {distance:.2f}"
-            )
-
             if distance < 50:
-                # [디버깅 3] 조건 충족 시 메시지 출력
-                print("★★★★★ 근접! UI를 변경합니다. ★★★★★")
                 self.robot_status_widget.hide()
                 self.arrival_prompt_widget.adjustSize()
                 self._update_popup_position(self.arrival_prompt_widget)
