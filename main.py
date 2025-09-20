@@ -265,14 +265,34 @@ class IndoorPositioningApp(QWidget):
         if not self.ble_scanner_thread.isRunning(): self.ble_scanner_thread.start(); print("BLE Scan Started.")
     
     def _on_robot_call_clicked(self):
-        if not self.udp_send_timer.isActive():
-            self.udp_send_timer.start(1000)
-            self.robot_status_widget.adjustSize()
-            self._update_popup_position(self.robot_status_widget)
-            self.robot_status_widget.show(); self.robot_status_widget.raise_()
-            self._show_toast("로봇을 호출했습니다.")
-        else:
+        # 1. 목적지가 설정되어 있는지 먼저 확인합니다.
+        if not self.target_room:
+            self._show_toast("로봇을 부를 목적지를 선택해주세요.", duration=2500)
+            
+            # 목적지 선택 다이얼로그를 띄웁니다.
+            dialog = SelectionDialog(self)
+            if dialog.exec():
+                # 사용자가 목적지를 선택했을 경우
+                selected = dialog.selected_room
+                self.target_room = self.room_coords[selected]
+                self.last_start_grid = None
+                self._update_navigation_path() # 지도에 경로를 표시합니다.
+                self._show_toast(f"<b>{selected}</b>(으)로 목적지 설정 후 로봇을 호출합니다.")
+            else:
+                # 사용자가 선택을 취소했을 경우
+                self._show_toast("로봇 호출을 취소했습니다.", duration=2000)
+                return # 함수를 종료하여 로봇 호출을 막습니다.
+
+        # 2. 목적지가 설정되었으므로 로봇 호출을 진행합니다.
+        if self.udp_send_timer.isActive():
             self._show_toast("이미 로봇이 호출되었습니다.")
+            return
+
+        self.udp_send_timer.start(1000)
+        self.robot_status_widget.adjustSize()
+        self._update_popup_position(self.robot_status_widget)
+        self.robot_status_widget.show()
+        self.robot_status_widget.raise_()
 
     def _on_robot_call_stop_clicked(self):
         if self.udp_send_timer.isActive():
