@@ -47,10 +47,10 @@ class IndoorPositioningApp(QWidget):
         self.rssi_mutex, self.rssi_data = QMutex(), {}
         self.current_speed, self.current_yaw, self.fused_pos = 0.0, 180.0, (0,0)
         self.target_room, self.last_start_grid, self.BLOCK_SIZE = None, None, 10
-        self.udp_target_ip = self.config.get('udp_target_ip', "192.168.0.141")
+        self.udp_target_ip = self.config.get('udp_target_ip', "10.24.184.20")
         self.udp_target_port = self.config.get('udp_target_port', 5005)
         self.udp_socket, self.udp_send_timer = socket.socket(socket.AF_INET, socket.SOCK_DGRAM), QTimer(self)
-        self.udp_receiver = UDPReceiverThread(port=self.config.get('udp_listen_port', 5006))
+        self.udp_receiver = UDPReceiverThread(port=self.config.get('udp_listen_port', 5005))
         self._init_logic_components(); self._init_ui(); self._connect_signals(); self._start_timers()
 
     def _init_logic_components(self):
@@ -115,7 +115,7 @@ class IndoorPositioningApp(QWidget):
 
     def _send_position_udp(self):
         px, py = self.fused_pos[0] * self.config['px_per_m_x'], self.fused_pos[1] * self.config['px_per_m_y']
-        message = f"px:{int(px)},py:{int(py)}"
+        message = f"{int(px)},{int(py)}"
         self.udp_socket.sendto(message.encode(), (self.udp_target_ip, self.udp_target_port))
         print(f"UDP Sent: {message}")
 
