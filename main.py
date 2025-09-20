@@ -77,6 +77,7 @@ class IndoorPositioningApp(QWidget):
         self.toast_label = QLabel(self); self.toast_label.setObjectName("Toast"); self.toast_label.setAlignment(Qt.AlignCenter); self.toast_label.hide()
         
         # 로봇 호출 상태 위젯
+        self.setObjectName("MainWindow")
         self.robot_status_widget = QWidget(self)
         self.robot_status_widget.setObjectName("RobotStatus")
         self.robot_status_widget.hide()
