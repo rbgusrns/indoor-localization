@@ -80,13 +80,11 @@ class IndoorPositioningApp(QWidget):
         self.robot_status_widget = QWidget(self)
         self.robot_status_widget.setObjectName("RobotStatus")
         self.robot_status_widget.hide()
-
         status_layout = QHBoxLayout(self.robot_status_widget)
         status_layout.setContentsMargins(25, 10, 25, 10); status_layout.setSpacing(20)
         status_layout.addWidget(QLabel("로봇이 오고 있습니다..."))
         self.stop_call_btn = QPushButton("중지"); self.stop_call_btn.setObjectName("StopCallButton")
         status_layout.addWidget(self.stop_call_btn)
-
         shadow = QGraphicsDropShadowEffect(); shadow.setBlurRadius(25); shadow.setColor(QColor(0, 0, 0, 80)); shadow.setOffset(0, 4)
         self.robot_status_widget.setGraphicsEffect(shadow)
 
@@ -94,22 +92,15 @@ class IndoorPositioningApp(QWidget):
         self.arrival_prompt_widget = QWidget(self)
         self.arrival_prompt_widget.setObjectName("ArrivalPrompt")
         self.arrival_prompt_widget.hide()
-
         arrival_layout = QVBoxLayout(self.arrival_prompt_widget)
         arrival_layout.setContentsMargins(20, 20, 20, 20); arrival_layout.setSpacing(15); arrival_layout.setAlignment(Qt.AlignCenter)
-        
         message_layout = QHBoxLayout(); message_layout.setSpacing(15); message_layout.setAlignment(Qt.AlignCenter)
-        
         message_label = QLabel("로봇이 도착했습니다.<br>진료실로 이동하시겠습니까?")
         message_label.setAlignment(Qt.AlignCenter)
-
         message_layout.addWidget(message_label)
-
         self.confirm_move_btn = QPushButton("확인"); self.confirm_move_btn.setObjectName("ConfirmMoveButton")
-
         arrival_layout.addLayout(message_layout)
         arrival_layout.addWidget(self.confirm_move_btn, alignment=Qt.AlignCenter)
-        
         arrival_shadow = QGraphicsDropShadowEffect(); arrival_shadow.setBlurRadius(25); arrival_shadow.setColor(QColor(0, 0, 0, 80)); arrival_shadow.setOffset(0, 4)
         self.arrival_prompt_widget.setGraphicsEffect(arrival_shadow)
 
@@ -117,23 +108,33 @@ class IndoorPositioningApp(QWidget):
         self.navigation_status_widget = QWidget(self)
         self.navigation_status_widget.setObjectName("NavigationStatus")
         self.navigation_status_widget.hide()
-
         nav_layout = QHBoxLayout(self.navigation_status_widget)
         nav_layout.setContentsMargins(25, 10, 25, 10); nav_layout.setSpacing(20)
-        
         nav_layout.addWidget(QLabel("로봇을 따라 이동하세요.."))
         self.cancel_nav_btn = QPushButton("취소"); self.cancel_nav_btn.setObjectName("CancelNavButton")
         nav_layout.addWidget(self.cancel_nav_btn)
-
         nav_shadow = QGraphicsDropShadowEffect(); nav_shadow.setBlurRadius(25); nav_shadow.setColor(QColor(0, 0, 0, 80)); nav_shadow.setOffset(0, 4)
         self.navigation_status_widget.setGraphicsEffect(nav_shadow)
+
+        # 현재 경로 안내 위젯 (좌측 상단)
+        self.current_nav_widget = QWidget(self)
+        self.current_nav_widget.setObjectName("CurrentNav")
+        self.current_nav_widget.hide()
+        nav_info_layout = QHBoxLayout(self.current_nav_widget)
+        nav_info_layout.setContentsMargins(20, 10, 20, 10); nav_info_layout.setSpacing(15)
+        self.current_nav_label = QLabel("안내: ")
+        self.current_nav_cancel_btn = QPushButton("취소")
+        self.current_nav_cancel_btn.setObjectName("CurrentNavCancelButton")
+        nav_info_layout.addWidget(self.current_nav_label)
+        nav_info_layout.addWidget(self.current_nav_cancel_btn)
+        current_nav_shadow = QGraphicsDropShadowEffect(); current_nav_shadow.setBlurRadius(20); current_nav_shadow.setColor(QColor(0, 0, 0, 70)); current_nav_shadow.setOffset(0, 3)
+        self.current_nav_widget.setGraphicsEffect(current_nav_shadow)
 
         # 메인 레이아웃
         self.map_viewer = MapViewer(self.config['map_file'], self.config['px_per_m_x'], self.config['px_per_m_y'])
         self.map_viewer._init_est_items(0, 0, 180.0)
         self.nav_btn = QPushButton("길안내"); self.nav_btn.setObjectName("NAV")
         self.robot_btn = QPushButton("로봇\n호출"); self.robot_btn.setObjectName("Robot")
-
         right_layout = QVBoxLayout(); right_layout.addWidget(self.nav_btn); right_layout.addWidget(self.robot_btn)
         main_layout = QHBoxLayout(self); main_layout.addWidget(self.map_viewer); main_layout.addLayout(right_layout)
         
@@ -149,6 +150,7 @@ class IndoorPositioningApp(QWidget):
         self.stop_call_btn.clicked.connect(self._on_robot_call_stop_clicked)
         self.confirm_move_btn.clicked.connect(self._on_arrival_confirmed)
         self.cancel_nav_btn.clicked.connect(self._on_navigation_cancel_clicked)
+        self.current_nav_cancel_btn.clicked.connect(lambda: self._stop_navigation("안내를 취소했습니다."))
         shortcut = QShortcut(QKeySequence("G"), self); shortcut.activated.connect(self._start_ble_scan)
         self.udp_send_timer.timeout.connect(self._send_position_udp)
         self.udp_destination_timer.timeout.connect(self._send_destination_udp)
@@ -211,6 +213,7 @@ class IndoorPositioningApp(QWidget):
         self._update_popup_position(self.robot_status_widget)
         self._update_popup_position(self.arrival_prompt_widget)
         self._update_popup_position(self.navigation_status_widget)
+        self.current_nav_widget.move(20, 20)
 
     def _update_navigation_path(self):
         if not self.target_room: return
@@ -254,12 +257,20 @@ class IndoorPositioningApp(QWidget):
     def _show_selection_dialog(self):
         dialog = SelectionDialog(self)
         if dialog.exec():
-            selected = dialog.selected_room; self.target_room = self.room_coords[selected]
+            selected = dialog.selected_room
+            self.target_room = self.room_coords[selected]
             self._show_toast(f"<b>{selected}</b>로 안내를 시작합니다.")
-            self.last_start_grid = None; self._update_navigation_path()
+            self.last_start_grid = None
+            self._update_navigation_path()
+            self.current_nav_label.setText(f"안내: <b>{selected}</b>")
+            self.current_nav_widget.adjustSize()
+            self.current_nav_widget.show()
+            self.current_nav_widget.raise_()
         else:
             self._show_toast("안내를 취소했습니다.", duration=2000)
-            self.target_room = None; self.map_viewer.draw_path(None)
+            self.target_room = None
+            self.map_viewer.draw_path(None)
+            self.current_nav_widget.hide()
             
     def _start_ble_scan(self):
         if not self.ble_scanner_thread.isRunning(): self.ble_scanner_thread.start(); print("BLE Scan Started.")
@@ -274,6 +285,10 @@ class IndoorPositioningApp(QWidget):
                 self.target_room = self.room_coords[selected]
                 self.last_start_grid = None
                 self._update_navigation_path()
+                self.current_nav_label.setText(f"안내: <b>{selected}</b>")
+                self.current_nav_widget.adjustSize()
+                self.current_nav_widget.show()
+                self.current_nav_widget.raise_()
                 self._show_toast(f"<b>{selected}</b>(으)로 목적지 설정 후 로봇을 호출합니다.")
             else:
                 self._show_toast("로봇 호출을 취소했습니다.", duration=2000)
@@ -312,6 +327,7 @@ class IndoorPositioningApp(QWidget):
         if self.udp_destination_timer.isActive():
             self.udp_destination_timer.stop()
         self.navigation_status_widget.hide()
+        self.current_nav_widget.hide()
         self.target_room = None
         self.map_viewer.draw_path(None)
         self._show_toast(message)
