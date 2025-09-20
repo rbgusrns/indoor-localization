@@ -1,7 +1,7 @@
 import sys
 from PyQt5.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, QGraphicsEllipseItem, QGraphicsPolygonItem
 from PyQt5.QtGui import QPainter, QPen, QBrush, QPixmap, QPolygonF, QColor, QPainterPath
-from PyQt5.QtCore import Qt, QRectF, QPointF, QTimer
+from PyQt5.QtCore import Qt, QRectF, QPointF, QTimer,  QPropertyAnimation, QEasingCurve
 import math
 
 class MapViewer(QGraphicsView):
@@ -31,12 +31,19 @@ class MapViewer(QGraphicsView):
         # 사용자 관련 변수
         self.est_marker = None
         self.heading_arrow = None
-        self._cur_pos = QPointF(0, 0)
         self._cur_heading = 0.0
         
         # 로봇 관련 변수
         self.robot_marker = None
-        self._robot_cur_pos = QPointF(0, 0) # 로봇의 현재 좌표를 저장할 변수 추가
+
+    def _start_animation(self, target_item, end_pos, duration=300):
+        """QPropertyAnimation을 사용해 target_item을 부드럽게 이동시키는 공통 함수"""
+        animation = QPropertyAnimation(target_item, b"pos", self) # 'pos' 속성을 애니메이션 대상으로 지정
+        animation.setDuration(duration)
+        animation.setStartValue(target_item.pos()) # 현재 위치에서 시작
+        animation.setEndValue(end_pos)             # 목표 위치에서 종료
+        animation.setEasingCurve(QEasingCurve.InOutCubic) # 부드러운 가감속 효과
+        animation.start()
 
     def _init_est_items(self, x, y, heading):
         """사용자 위치 마커와 방향 화살표를 초기화합니다."""
@@ -56,59 +63,61 @@ class MapViewer(QGraphicsView):
         self.heading_arrow.setZValue(19)
         self.scene.addItem(self.heading_arrow)
         
-        self._update_marker_pos(px, py, heading)
-        self._cur_pos = QPointF(px, py)
-        self._cur_heading = heading
-        self.centerOn(self._cur_pos)
+        self.est_marker.setPos(px, py) # 초기 위치 설정
+        self._update_arrow_and_center(px, py, heading)
 
-    def _update_arrow(self, px, py, heading):
-        """주어진 좌표와 방향으로 화살표 폴리곤을 업데이트합니다."""
+    def _update_arrow_and_center(self, px, py, heading):
+        """방향 화살표를 업데이트하고, 화면을 해당 위치로 중앙 정렬합니다."""
+        self._cur_heading = heading
         rad = math.radians(heading)
         size = 15
         tip = QPointF(px + size * math.cos(rad), py + size * math.sin(rad))
-        left = QPointF(px + size*0.6*math.cos(rad+math.radians(135)),
-                       py + size*0.6*math.sin(rad+math.radians(135)))
-        right = QPointF(px + size*0.6*math.cos(rad-math.radians(135)),
-                        py + size*0.6*math.sin(rad-math.radians(135)))
-        poly = QPolygonF([tip, left, right])
-        self.heading_arrow.setPolygon(poly)
+        left = QPointF(px + size*0.6*math.cos(rad+math.radians(135)), py + size*0.6*math.sin(rad+math.radians(135)))
+        right = QPointF(px + size*0.6*math.cos(rad-math.radians(135)), py + size*0.6*math.sin(rad-math.radians(135)))
+        
+        # 화살표를 원점 기준으로 그린 후, 사용자 마커와 함께 이동 및 회전시킵니다.
+        # 이 방식이 더 정확하고 관리가 편합니다.
+        arrow_poly = QPolygonF([
+            QPointF(size, 0),
+            QPointF(size*0.2, -size*0.4),
+            QPointF(size*0.2, size*0.4)
+        ])
+        self.heading_arrow.setPolygon(arrow_poly)
+        self.heading_arrow.setPos(px, py)
+        self.heading_arrow.setRotation(heading)
 
-    def move_to(self, x, y, heading, duration=200):
+        self.centerOn(QPointF(px, py))
+
+    def move_to(self, x, y, heading, duration=300):
         """사용자 아이콘을 부드럽게 이동시킵니다."""
-        if self.est_marker is None or self.heading_arrow is None:
+        if self.est_marker is None:
             self._init_est_items(x, y, heading)
             return
 
-        start_pos, end_pos = self._cur_pos, QPointF(x * self.px_per_m_x, y * self.px_per_m_y)
-        start_h, end_h = self._cur_heading % 360, heading % 360
-        delta_h = (end_h - start_h + 180) % 360 - 180
+        end_pos = QPointF(x * self.px_per_m_x, y * self.px_per_m_y)
         
-        steps = 10
-        for i in range(1, steps + 1):
-            t = i / steps
-            px = start_pos.x() + (end_pos.x() - start_pos.x()) * t
-            py = start_pos.y() + (end_pos.y() - start_pos.y()) * t
-            hd = start_h + delta_h * t
-            QTimer.singleShot(int(duration * t), lambda px=px, py=py, hd=hd: self._update_marker_pos(px, py, hd))
-
-        self._cur_pos, self._cur_heading = end_pos, (start_h + delta_h) % 360
-
-    def _update_marker_pos(self, px, py, hd):
-        """마커와 화살표의 위치를 업데이트하는 내부 함수."""
-        if self.est_marker: self.est_marker.setPos(px, py)
-        if self.heading_arrow: self._update_arrow(px, py, hd)
-        self.centerOn(QPointF(px, py))
+        # 사용자 마커와 화살표 위치를 동시에 애니메이션으로 이동
+        self._start_animation(self.est_marker, end_pos, duration)
+        self._start_animation(self.heading_arrow, end_pos, duration)
+        
+        # 화살표 방향은 즉시 업데이트
+        self.heading_arrow.setRotation(heading)
+        self._cur_heading = heading
+        
+        # 화면 중앙 정렬은 애니메이션 없이 즉시
+        self.centerOn(end_pos)
 
     def mark_estimated_position(self, x, y, heading):
         """사용자 아이콘을 즉시 이동시킵니다 (애니메이션 없음)."""
-        if self.est_marker is None or self.heading_arrow is None:
+        if self.est_marker is None:
             self._init_est_items(x, y, heading)
             return
         
         px = x * self.px_per_m_x
         py = y * self.px_per_m_y
-        self._update_marker_pos(px, py, heading)
-        self._cur_pos, self._cur_heading = QPointF(px, py), heading
+        
+        self.est_marker.setPos(px, py)
+        self._update_arrow_and_center(px, py, heading)
 
     def draw_path(self, path_points):
         """주어진 좌표들을 따라 지도 위에 경로를 그립니다."""
@@ -138,40 +147,14 @@ class MapViewer(QGraphicsView):
         self.robot_marker.setPen(QPen(QColor(Qt.white), 2))
         self.robot_marker.setZValue(18)
         self.scene.addItem(self.robot_marker)
-        
-        # 마커를 즉시 설정하고 현재 위치 저장
         self.robot_marker.setPos(px, py)
-        self._robot_cur_pos = QPointF(px, py)
 
-    def _update_robot_marker_pos(self, px, py):
-        """로봇 마커의 위치를 업데이트하는 내부 함수 (애니메이션용)."""
-        if self.robot_marker:
-            self.robot_marker.setPos(px, py)
-
-    def update_robot_position(self, px, py, duration=200):
+    def update_robot_position(self, px, py, duration=300):
         """지도 위에 로봇의 위치를 표시하거나 부드럽게 이동시킵니다."""
-        # 로봇 마커가 없으면(최초 호출 시) 즉시 생성하고 종료
         if self.robot_marker is None:
             self._init_robot_marker(px, py)
             return
 
-        # --- 이후 호출부터는 애니메이션 적용 ---
-        start_pos = self._robot_cur_pos
         end_pos = QPointF(px, py)
-        
-        # 시작점과 끝점이 거의 같다면 애니메이션 생략
-        if (start_pos - end_pos).manhattanLength() < 1:
-            return
-
-        steps = 10 # 애니메이션 부드러움 조절
-        for i in range(1, steps + 1):
-            t = i / steps
-            # 각 스텝의 중간 좌표 계산
-            next_px = start_pos.x() + (end_pos.x() - start_pos.x()) * t
-            next_py = start_pos.y() + (end_pos.y() - start_pos.y()) * t
-            # QTimer를 이용해 지정된 시간 후에 위치 업데이트
-            # 람다 함수에 인자를 명시적으로 넘겨주어 클로저 문제를 방지
-            QTimer.singleShot(int(duration * t), lambda p_x=next_px, p_y=next_py: self._update_robot_marker_pos(p_x, p_y))
-
-        # 애니메이션이 끝난 후의 최종 위치를 현재 위치로 저장
-        self._robot_cur_pos = end_pos
+        # 로봇 마커 이동에 공통 애니메이션 함수 사용
+        self._start_animation(self.robot_marker, end_pos, duration)
