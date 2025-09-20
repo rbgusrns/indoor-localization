@@ -267,16 +267,21 @@ class IndoorPositioningApp(QWidget):
     def _on_arrival_confirmed(self):
         self.arrival_prompt_widget.hide()
 
-        destination_name = "진료실" 
-        if destination_name in self.room_coords:
-            dest_m = self.room_coords[destination_name]
+        if self.target_room:
+            # self.target_room은 (x, y) 미터 좌표 튜플입니다.
+            dest_m = self.target_room 
+            
+            # 미터 좌표를 픽셀 좌표로 변환합니다.
             dest_px = dest_m[0] * self.config['px_per_m_x']
             dest_py = dest_m[1] * self.config['px_per_m_y']
+            
+            # UDP 메시지를 생성하고 로봇에게 전송합니다.
             message = f"{int(dest_px)},{int(dest_py)}"
             self.udp_socket.sendto(message.encode(), (self.udp_target_ip, self.udp_target_port))
-            print(f"UDP Sent to Robot: Destination '{destination_name}' at {message}")
+            print(f"UDP Sent to Robot: Final Destination at {message}")
         else:
-            print(f"오류: 설정 파일에서 '{destination_name}'의 좌표를 찾을 수 없습니다.")
+            print("오류: 현재 설정된 길안내 목적지가 없어 로봇에게 위치를 보낼 수 없습니다.")
+
 
         self.navigation_status_widget.adjustSize()
         self._update_popup_position(self.navigation_status_widget)
