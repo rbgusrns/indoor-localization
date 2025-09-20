@@ -198,6 +198,24 @@ class IndoorPositioningApp(QWidget):
 
     def _update_navigation_path(self):
         if not self.target_room: return
+
+        # --- ▼▼▼ 추가된 코드 시작 ▼▼▼ ---
+        # 1. 현재 위치(미터)와 목표 위치(미터)를 픽셀 좌표로 변환합니다.
+        user_px = self.fused_pos[0] * self.config['px_per_m_x']
+        user_py = self.fused_pos[1] * self.config['px_per_m_y']
+        target_px = self.target_room[0] * self.config['px_per_m_x']
+        target_py = self.target_room[1] * self.config['px_per_m_y']
+
+        # 2. 두 픽셀 좌표 사이의 유클리드 거리를 계산합니다.
+        distance = np.sqrt((user_px - target_px)**2 + (user_py - target_py)**2)
+
+        # 3. 거리가 50픽셀 미만이면 도착으로 간주하고 안내를 종료합니다.
+        if distance < 50:
+            self._stop_navigation("<b>목적지에 도착했습니다.</b> 안내를 종료합니다.")
+            return  # 경로를 더 이상 업데이트하지 않고 함수를 빠져나갑니다.
+        # --- ▲▲▲ 추가된 코드 종료 ▲▲▲ ---
+
+        # 기존 경로 탐색 및 그리기 로직 (수정 없음)
         start_m, end_m = self.fused_pos, self.target_room
         start_grid, end_grid = self.meters_to_grid(start_m), self.meters_to_grid(end_m)
         if self.last_start_grid == start_grid: return
@@ -224,14 +242,26 @@ class IndoorPositioningApp(QWidget):
         self.rssi_mutex.lock(); self.rssi_data.clear(); self.rssi_mutex.unlock()
 
     def _show_selection_dialog(self):
-        dialog = SelectionDialog(self)
-        if dialog.exec():
-            selected = dialog.selected_room; self.target_room = self.room_coords[selected]
-            self._show_toast(f"<b>{selected}</b>로 안내를 시작합니다.")
-            self.last_start_grid = None; self._update_navigation_path()
-        else:
-            self._show_toast("안내를 취소했습니다.", duration=2000)
-            self.target_room = None; self.map_viewer.draw_path(None)
+            dialog = SelectionDialog(self)
+            if dialog.exec():
+                selected = dialog.selected_room; self.target_room = self.room_coords[selected]
+                self._show_toast(f"<b>{selected}</b>로 안내를 시작합니다.")
+                self.last_start_grid = None
+
+                # --- ▼▼▼ 추가된 코드 ▼▼▼ ---
+                # 길안내 상태 위젯을 표시합니다.
+                self.navigation_status_widget.adjustSize()
+                self._update_popup_position(self.navigation_status_widget)
+                self.navigation_status_widget.show()
+                self.navigation_status_widget.raise_()
+                # --- ▲▲▲ 추가된 코드 ▲▲▲ ---
+
+                self._update_navigation_path()
+            else:
+                # 여기서는 _stop_navigation 함수를 호출할 필요가 없습니다.
+                # 아직 안내가 시작되지 않았기 때문입니다.
+                self._show_toast("안내를 취소했습니다.", duration=2000)
+                self.target_room = None; self.map_viewer.draw_path(None)
             
     def _start_ble_scan(self):
         if not self.ble_scanner_thread.isRunning(): self.ble_scanner_thread.start(); print("BLE Scan Started.")
@@ -264,6 +294,16 @@ class IndoorPositioningApp(QWidget):
         self.navigation_status_widget.show()
         self.navigation_status_widget.raise_()
         
+    def _stop_navigation(self, message):
+        """길안내를 중지하고 관련 UI를 정리합니다."""
+        self.navigation_status_widget.hide()
+        self.target_room = None
+        self.map_viewer.draw_path(None)
+        self._show_toast(message)
+
+    def _on_navigation_cancel_clicked(self):
+        # 기존 로직 대신 새로 만든 함수를 호출하도록 변경합니다.
+        self._stop_navigation("길안내를 취소했습니다.")        
     def _on_navigation_cancel_clicked(self):
         self.navigation_status_widget.hide()
         self.target_room = None
