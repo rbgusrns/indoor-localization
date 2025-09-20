@@ -15,10 +15,8 @@ class MapViewer(QGraphicsView):
         self.scene = QGraphicsScene()
         self.setScene(self.scene)
 
-        # 경로 그래픽 아이템을 저장할 변수
         self.path_item = None
 
-        # 맵 이미지 로딩 및 설정
         pixmap = QPixmap(map_path) 
         if pixmap.isNull():
             print(f"맵 이미지 로드 실패: {map_path}")
@@ -32,6 +30,9 @@ class MapViewer(QGraphicsView):
 
         self.est_marker = None
         self.heading_arrow = None
+        
+        # 로봇 위치 마커를 위한 변수
+        self.robot_marker = None
 
     def _init_est_items(self, x, y, heading):
         """사용자 위치 마커와 방향 화살표를 초기화합니다."""
@@ -110,16 +111,13 @@ class MapViewer(QGraphicsView):
         """
         주어진 좌표들을 따라 지도 위에 경로를 그립니다. (화살표 없음)
         """
-        # 1. 기존 경로 아이템이 있다면 삭제
         if self.path_item:
             self.scene.removeItem(self.path_item)
             self.path_item = None
         
-        # 2. 그릴 경로가 없거나 점이 하나 뿐이면 여기서 종료
         if not path_points or len(path_points) < 2:
             return
         
-        # 3. 새로운 경로 그리기
         path = QPainterPath()
         path.moveTo(path_points[0])
         for point in path_points[1:]:
@@ -129,3 +127,17 @@ class MapViewer(QGraphicsView):
         self.path_item = self.scene.addPath(path, pen)
         self.path_item.setZValue(10)
 
+    def update_robot_position(self, px, py):
+        """지도 위에 로봇의 위치를 표시하거나 업데이트합니다."""
+        if self.robot_marker is None:
+            # 로봇 마커가 없으면 새로 생성
+            radius = 10
+            self.robot_marker = QGraphicsEllipseItem(-radius, -radius, radius*2, radius*2)
+            # 사용자와 다른 색상(파란색)으로 설정
+            self.robot_marker.setBrush(QColor("#3498db")) 
+            self.robot_marker.setPen(QPen(QColor(Qt.white), 2))
+            self.robot_marker.setZValue(18) # 사용자 마커보다 살짝 뒤에 위치
+            self.scene.addItem(self.robot_marker)
+        
+        # 로봇 마커의 위치를 업데이트
+        self.robot_marker.setPos(px, py)

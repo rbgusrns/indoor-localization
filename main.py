@@ -1,5 +1,4 @@
 import sys
-
 import serial
 import time
 import numpy as np
@@ -18,6 +17,7 @@ from serial_reader import SerialReader
 from event import SelectionDialog
 from bin import create_binary_map
 from Astar import find_path, create_distance_map
+from robot_tracker import RobotTrackerThread
 
 # --- UDP 수신 스레드 클래스 ---
 class UDPReceiverThread(QThread):
@@ -66,6 +66,8 @@ class IndoorPositioningApp(QWidget):
             self.serial_port = serial.Serial(imu_port, baudrate); time.sleep(1); self.serial_port.write(b'ZERO\n')
             self.serial_reader = SerialReader(port=imu_port, baudrate=baudrate); self.serial_reader.start()
         except serial.SerialException as e: print(f"시리얼 포트 오류: {e}."); self.serial_reader = None
+        
+        self.robot_tracker = RobotTrackerThread(port=self.config.get('robot_udp_port', 5006))
 
     def _init_ui(self):
         self.toast_label = QLabel(self); self.toast_label.setObjectName("Toast"); self.toast_label.setAlignment(Qt.AlignCenter); self.toast_label.hide()
@@ -109,10 +111,17 @@ class IndoorPositioningApp(QWidget):
         shortcut = QShortcut(QKeySequence("G"), self); shortcut.activated.connect(self._start_ble_scan)
         self.udp_send_timer.timeout.connect(self._send_position_udp)
         self.udp_receiver.message_received.connect(self._on_robot_message_received)
+        
+        self.robot_tracker.robot_position_updated.connect(self._on_robot_position_update)
 
     def _start_timers(self):
         self.rssi_clear_timer = QTimer(self); self.rssi_clear_timer.timeout.connect(self._clear_rssi_cache); self.rssi_clear_timer.start(2000)
         self.udp_receiver.start()
+        self.robot_tracker.start()
+
+    def _on_robot_position_update(self, px, py):
+        """로봇 트래커로부터 받은 픽셀 좌표로 지도 위 로봇 위치를 업데이트합니다."""
+        self.map_viewer.update_robot_position(px, py)
 
     def _send_position_udp(self):
         px, py = self.fused_pos[0] * self.config['px_per_m_x'], self.fused_pos[1] * self.config['px_per_m_y']
@@ -178,11 +187,7 @@ class IndoorPositioningApp(QWidget):
     def _on_robot_call_clicked(self):
         if not self.udp_send_timer.isActive():
             self.udp_send_timer.start(1000)
-            
-            # --- ▼ 여기가 핵심 수정 사항 ▼ ---
-            self.robot_status_widget.adjustSize() # 내용물에 맞게 컨테이너 크기 자동 조절
-            # --- ▲ ---
-
+            self.robot_status_widget.adjustSize()
             self._update_popup_position(self.robot_status_widget)
             self.robot_status_widget.show(); self.robot_status_widget.raise_()
             self._show_toast("로봇을 호출했습니다.")
@@ -216,6 +221,7 @@ class IndoorPositioningApp(QWidget):
         return QPointF(px, py)
 
     def closeEvent(self, event):
+        self.robot_tracker.stop()
         self.udp_receiver.stop()
         self.ble_scanner_thread.stop()
         if self.serial_reader: self.serial_reader.stop()
@@ -226,4 +232,3 @@ if __name__ == "__main__":
     config = load_config()
     main_window = IndoorPositioningApp(config)
     sys.exit(app.exec_())
-
