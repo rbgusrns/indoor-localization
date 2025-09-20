@@ -47,39 +47,67 @@ QPushButton:hover {
 }
 
 #RobotStatus QLabel {
-color: white;
-font-size: 30px;
-font-weight: bold;
-background-color: transparent; /* 배경 투명 */
-border: none; /* 테두리 없음 */
-}
-
-#ArrivalPrompt {
-    background-color: rgba(220, 240, 255, 0.95); /* 원하는 다른 색상으로 변경 */
     color: white;
     font-size: 30px;
     font-weight: bold;
-    padding: 18px 35px;
-    border-radius: 30px;
-    border: 1px solid rgba(255, 255, 255, 90);
+    background-color: transparent; /* 배경 투명 */
+    border: none; /* 테두리 없음 */
 }
 
+/* --- ▼▼▼ 도착 프롬프트 스타일 수정 시작 ▼▼▼ --- */
+#ArrivalPrompt {
+    background-color: white; /* 흰색 배경으로 변경 */
+    border-radius: 20px; /* 모서리 둥글게 */
+    border: 1px solid #CCCCCC; /* 은은한 회색 테두리 */
+    padding: 20px 40px;
+}
+
+#ArrivalPrompt QLabel {
+    color: #333333; /* 어두운 글자색 */
+    font-size: 28px; /* 폰트 크기 조정 */
+    font-weight: bold;
+    background-color: transparent;
+    border: none;
+}
+/* --- ▲▲▲ 도착 프롬프트 스타일 수정 끝 ▲▲▲ --- */
+
+
 #StopCallButton {
-background-color: #e74c3c; /* 빨간색 계열 */
-color: white;
-font-size: 22px;
-font-weight: bold;
-padding: 10px 20px;
-border-radius: 20px;
-border: none;
-/* 버튼 크기 관련 속성 제거하여 자동으로 조절되도록 함 */
-width: auto;
-height: auto;
-margin: 0px;
+    background-color: #e74c3c; /* 빨간색 계열 */
+    color: white;
+    font-size: 22px;
+    font-weight: bold;
+    padding: 10px 20px;
+    border-radius: 20px;
+    border: none;
+    width: auto;
+    height: auto;
+    margin: 0px;
 }
 #StopCallButton:hover {
-background-color: #c0392b;
+    background-color: #c0392b;
 }
 #StopCallButton:pressed {
-background-color: #a93226;
+    background-color: #a93226;
+}
+
+/* --- ▼▼▼ 확인 버튼 스타일 추가 ▼▼▼ --- */
+#ConfirmMoveButton {
+    background-color: #3498db; /* 세련된 파란색 */
+    color: white;
+    font-size: 24px;
+    font-weight: bold;
+    padding: 12px 45px; /* 패딩으로 크기 조절 */
+    border-radius: 22px;
+    border: none;
+    /* 고정 크기 제거하여 유연하게 설정 */
+    width: auto;
+    height: auto;
+    margin-top: 10px; /* 메시지와의 간격 */
+}
+#ConfirmMoveButton:hover {
+    background-color: #2980b9;
+}
+#ConfirmMoveButton:pressed {
+    background-color: #2471a3;
 }

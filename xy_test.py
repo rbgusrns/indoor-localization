@@ -3,7 +3,7 @@ import socket
 # --- 설정 ---
 TARGET_IP = "192.168.0.137"  # 데이터를 보낼 IP 주소
 TARGET_PORT = 5005           # 데이터를 보낼 포트 번호
-MESSAGE = "1,2.8"              # 보낼 메시지
+MESSAGE = "1.5,2.8"              # 보낼 메시지
 
 # --- UDP 소켓 생성 및 전송 ---
 print(f"'{MESSAGE}' 메시지를 {TARGET_IP}:{TARGET_PORT}로 전송합니다.")

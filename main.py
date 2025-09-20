@@ -69,10 +69,12 @@ class IndoorPositioningApp(QWidget):
         
         self.robot_tracker = RobotTrackerThread(port=self.config.get('robot_udp_port', 5005))
 
+# IndoorPositioningApp 클래스의 _init_ui 메서드 내부를 수정하세요.
+
     def _init_ui(self):
         self.toast_label = QLabel(self); self.toast_label.setObjectName("Toast"); self.toast_label.setAlignment(Qt.AlignCenter); self.toast_label.hide()
         
-        # 로봇 호출 상태 위젯
+        # 로봇 호출 상태 위젯 (기존과 동일)
         self.robot_status_widget = QWidget(self)
         self.robot_status_widget.setObjectName("RobotStatus")
         self.robot_status_widget.hide()
@@ -86,20 +88,48 @@ class IndoorPositioningApp(QWidget):
         shadow = QGraphicsDropShadowEffect(); shadow.setBlurRadius(25); shadow.setColor(QColor(0, 0, 0, 80)); shadow.setOffset(0, 4)
         self.robot_status_widget.setGraphicsEffect(shadow)
 
-        # 로봇 도착 확인 위젯 (새로 추가)
+        # --- ▼▼▼ 로봇 도착 확인 위젯 수정 시작 ▼▼▼ ---
         self.arrival_prompt_widget = QWidget(self)
-        self.arrival_prompt_widget.setObjectName("ArrivalPrompt") # QSS 스타일링을 위해 다른 이름 부여
+        self.arrival_prompt_widget.setObjectName("ArrivalPrompt")
         self.arrival_prompt_widget.hide()
 
-        arrival_layout = QHBoxLayout(self.arrival_prompt_widget)
-        arrival_layout.setContentsMargins(25, 10, 25, 10); arrival_layout.setSpacing(20)
-        arrival_layout.addWidget(QLabel("진료실로 이동하시겠습니까?"))
-        self.confirm_move_btn = QPushButton("확인"); self.confirm_move_btn.setObjectName("ConfirmMoveButton")
-        arrival_layout.addWidget(self.confirm_move_btn)
+        # 전체 레이아웃을 세로(VBox)로 변경
+        arrival_layout = QVBoxLayout(self.arrival_prompt_widget)
+        arrival_layout.setContentsMargins(20, 20, 20, 20) # 여백 조정
+        arrival_layout.setSpacing(15) # 위젯 간 간격 조정
+        arrival_layout.setAlignment(Qt.AlignCenter) # 중앙 정렬
+
+        # 아이콘과 메시지를 담을 가로(HBox) 레이아웃 생성
+        message_layout = QHBoxLayout()
+        message_layout.setSpacing(15)
+        message_layout.setAlignment(Qt.AlignCenter)
+
+        # 정보 아이콘 추가
+        icon_label = QLabel()
+        # PyQt5의 기본 제공 아이콘(Information) 사용
+        icon = self.style().standardIcon(QApplication.style().SP_MessageBoxInformation)
+        icon_label.setPixmap(icon.pixmap(50, 50)) # 아이콘 크기 설정
         
+        message_label = QLabel("로봇이 도착했습니다.<br>진료실로 이동하시겠습니까?")
+        message_label.setAlignment(Qt.AlignCenter) # 텍스트 중앙 정렬
+
+        message_layout.addWidget(icon_label)
+        message_layout.addWidget(message_label)
+
+        self.confirm_move_btn = QPushButton("확인")
+        self.confirm_move_btn.setObjectName("ConfirmMoveButton")
+
+        # 메인 세로 레이아웃에 추가
+        arrival_layout.addLayout(message_layout)
+        arrival_layout.addWidget(self.confirm_move_btn, alignment=Qt.AlignCenter)
+
         # 동일한 그림자 효과 적용
-        arrival_shadow = QGraphicsDropShadowEffect(); arrival_shadow.setBlurRadius(25); arrival_shadow.setColor(QColor(0, 0, 0, 80)); arrival_shadow.setOffset(0, 4)
+        arrival_shadow = QGraphicsDropShadowEffect()
+        arrival_shadow.setBlurRadius(25)
+        arrival_shadow.setColor(QColor(0, 0, 0, 80))
+        arrival_shadow.setOffset(0, 4)
         self.arrival_prompt_widget.setGraphicsEffect(arrival_shadow)
+        # --- ▲▲▲ 로봇 도착 확인 위젯 수정 끝 ▲▲▲ ---
 
         self.map_viewer = MapViewer(self.config['map_file'], self.config['px_per_m_x'], self.config['px_per_m_y'])
         self.map_viewer._init_est_items(0, 0, 180.0)
@@ -110,7 +140,6 @@ class IndoorPositioningApp(QWidget):
         main_layout = QHBoxLayout(self); main_layout.addWidget(self.map_viewer); main_layout.addLayout(right_layout)
         
         self.setWindowTitle("ODIGA"); self.setFocusPolicy(Qt.StrongFocus); self.load_stylesheet('stylesheet.qss'); self.showFullScreen(); self.setFocus()
-
     def _connect_signals(self):
         self.ble_scanner_thread.detected.connect(self._on_ble_device_detected)
         if self.serial_reader:
