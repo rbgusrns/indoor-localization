@@ -15,7 +15,7 @@ class SelectionDialog(QDialog):
         layout.setSpacing(15) # 버튼 사이 간격
         layout.setAlignment(Qt.AlignCenter)
 
-        title_label = QLabel("어디로 가시겠습니까?")
+        title_label = QLabel("진료실을 선택해 주세요.")
         title_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(title_label)
 
