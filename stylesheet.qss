@@ -72,7 +72,7 @@ QPushButton:hover {
 /* --- ▲▲▲ 도착 프롬프트 스타일 수정 끝 ▲▲▲ --- */
 
 #NavigationStatus {
-    background-color: #3498db; /* 파란색 배경 */
+    background-color: #2af34b; /* 파란색 배경 */
     color: white;
     font-size: 30px;
     font-weight: bold;
