@@ -17,7 +17,7 @@ from serial_reader import SerialReader
 from event import SelectionDialog
 from bin import create_binary_map
 from Astar import find_path, create_distance_map
-from robot_viewer import RobotTrackerThread
+from robot_tracker import RobotTrackerThread
 
 # --- UDP 수신 스레드 클래스 ---
 class UDPReceiverThread(QThread):
