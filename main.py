@@ -242,26 +242,14 @@ class IndoorPositioningApp(QWidget):
         self.rssi_mutex.lock(); self.rssi_data.clear(); self.rssi_mutex.unlock()
 
     def _show_selection_dialog(self):
-            dialog = SelectionDialog(self)
-            if dialog.exec():
-                selected = dialog.selected_room; self.target_room = self.room_coords[selected]
-                self._show_toast(f"<b>{selected}</b>로 안내를 시작합니다.")
-                self.last_start_grid = None
-
-                # --- ▼▼▼ 추가된 코드 ▼▼▼ ---
-                # 길안내 상태 위젯을 표시합니다.
-                self.navigation_status_widget.adjustSize()
-                self._update_popup_position(self.navigation_status_widget)
-                self.navigation_status_widget.show()
-                self.navigation_status_widget.raise_()
-                # --- ▲▲▲ 추가된 코드 ▲▲▲ ---
-
-                self._update_navigation_path()
-            else:
-                # 여기서는 _stop_navigation 함수를 호출할 필요가 없습니다.
-                # 아직 안내가 시작되지 않았기 때문입니다.
-                self._show_toast("안내를 취소했습니다.", duration=2000)
-                self.target_room = None; self.map_viewer.draw_path(None)
+        dialog = SelectionDialog(self)
+        if dialog.exec():
+            selected = dialog.selected_room; self.target_room = self.room_coords[selected]
+            self._show_toast(f"<b>{selected}</b>로 안내를 시작합니다.")
+            self.last_start_grid = None; self._update_navigation_path()
+        else:
+            self._show_toast("안내를 취소했습니다.", duration=2000)
+            self.target_room = None; self.map_viewer.draw_path(None)
             
     def _start_ble_scan(self):
         if not self.ble_scanner_thread.isRunning(): self.ble_scanner_thread.start(); print("BLE Scan Started.")
