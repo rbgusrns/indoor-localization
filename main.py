@@ -52,10 +52,10 @@ class IndoorPositioningApp(QWidget):
         self.robot_arrival_processed = False
 
         self.udp_target_ip = self.config.get('udp_target_ip', "10.24.184.20")
-        self.udp_target_port = self.config.get('udp_target_port', 5006)
+        self.udp_target_port = self.config.get('udp_target_port', 5005)
         self.udp_socket, self.udp_send_timer = socket.socket(socket.AF_INET, socket.SOCK_DGRAM), QTimer(self)
         self.udp_destination_timer = QTimer(self)
-        self.udp_receiver = UDPReceiverThread(port=self.config.get('udp_listen_port', 5005))
+        self.udp_receiver = UDPReceiverThread(port=self.config.get('udp_listen_port', 5006))
         self._init_logic_components(); self._init_ui(); self._connect_signals(); self._start_timers()
 
     def _init_logic_components(self):
