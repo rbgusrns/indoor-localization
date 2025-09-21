@@ -168,18 +168,6 @@ class IndoorPositioningApp(QWidget):
     def _on_robot_position_update(self, px, py):
         self.map_viewer.update_robot_position(px, py)
         
-        if self.udp_send_timer.isActive() and self.robot_status_widget.isVisible():
-            user_px, user_py = self.fused_pos[0] * self.config['px_per_m_x'], self.fused_pos[1] * self.config['px_per_m_y']
-            distance = np.sqrt((user_px - px)**2 + (user_py - py)**2)
-            
-            if distance < 50:
-                self.udp_send_timer.stop()
-                
-                self.robot_status_widget.hide()
-                self.arrival_prompt_widget.adjustSize()
-                self._update_popup_position(self.arrival_prompt_widget)
-                self.arrival_prompt_widget.show()
-                self.arrival_prompt_widget.raise_()
 
     def _send_position_udp(self):
         px, py = self.fused_pos[0] * self.config['px_per_m_x'], self.fused_pos[1] * self.config['px_per_m_y']
@@ -347,6 +335,22 @@ class IndoorPositioningApp(QWidget):
             if self.udp_send_timer.isActive():
                 self.udp_send_timer.stop()
             self._show_toast("로봇이 도착했습니다.")
+
+        elif message == "999,999":
+            print("로봇 도착 신호 (999,999) 수신.")
+            
+            # 사용자 위치 전송 타이머 중지
+            if self.udp_send_timer.isActive():
+                self.udp_send_timer.stop()
+            
+            # "로봇이 오고 있습니다..." 창 숨기기
+            self.robot_status_widget.hide()
+
+            # "로봇이 도착했습니다" 창 표시
+            self.arrival_prompt_widget.adjustSize()
+            self._update_popup_position(self.arrival_prompt_widget)
+            self.arrival_prompt_widget.show()
+            self.arrival_prompt_widget.raise_()
 
     def load_stylesheet(self, filename):
         qss_file = QFile(filename);
