@@ -12,20 +12,20 @@ from fingerprinting import FingerprintDB
 from map_viewer import MapViewer
 
 # 맵, 룸 크기, 그리드 설정
-map_px_width = 800
-map_px_height = 530
-room_width_m = 10.8
-room_height_m = 7.2
+map_px_width = 762
+map_px_height = 574
+room_width_m = 4
+room_height_m = 3
 grid_width = 8
-grid_height = 5
+grid_height = 6
 BEACON_COUNT = 6
 # 미터 → 픽셀 스케일 계산
-px_per_m_x = map_px_width  / room_width_m    # ≈74px/m 1m에 74픽셀.
-px_per_m_y = map_px_height / room_height_m   # ≈73.6px/m
+px_per_m_x = map_px_width  / room_width_m    
+px_per_m_y = map_px_height / room_height_m  
 
 # 그리드 1칸 (m)
-cell_m_x = room_width_m  / grid_width   # =1.35m
-cell_m_y = room_height_m / grid_height  # =1.44m
+cell_m_x = room_width_m  / grid_width   
+cell_m_y = room_height_m / grid_height  
 
 class CalibViewer(MapViewer): # 맵을 띄우고, 셀의좌표를 입력받아 그 중앙을 띄우는 클래스.
     def __init__(self, map_path, px_per_m_x, px_per_m_y):
@@ -79,7 +79,7 @@ class CalibrationWindow(QWidget):
         # 임시 RSSI 벡터 저장소
         self.tmp_vec = {}
 
-        map_path = self.cfg.get('map_file', '203.png')
+        map_path = self.cfg.get('map_file', 'map.png')
         self.viewer = CalibViewer(map_path, px_per_m_x, px_per_m_y)
         self.viewer.mark_calibration_point(self.current_x, self.current_y)
         self.setFocusPolicy(Qt.StrongFocus)

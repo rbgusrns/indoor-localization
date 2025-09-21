@@ -48,6 +48,9 @@ class IndoorPositioningApp(QWidget):
         self.rssi_mutex, self.rssi_data = QMutex(), {}
         self.current_speed, self.current_yaw, self.fused_pos = 0.0, 180.0, (0,0)
         self.target_room, self.last_start_grid, self.BLOCK_SIZE = None, None, 10
+
+        self.robot_arrival_processed = False
+
         self.udp_target_ip = self.config.get('udp_target_ip', "10.24.184.20")
         self.udp_target_port = self.config.get('udp_target_port', 5005)
         self.udp_socket, self.udp_send_timer = socket.socket(socket.AF_INET, socket.SOCK_DGRAM), QTimer(self)
@@ -288,6 +291,8 @@ class IndoorPositioningApp(QWidget):
         if self.udp_send_timer.isActive():
             self._show_toast("이미 로봇이 호출되었습니다.")
             return
+        
+        self.robot_arrival_processed = False
 
         self.udp_send_timer.start(1000)
         self.robot_status_widget.adjustSize()
@@ -337,20 +342,24 @@ class IndoorPositioningApp(QWidget):
             self._show_toast("로봇이 도착했습니다.")
 
         elif message == "999,999":
-            print("로봇 도착 신호 (999,999) 수신.")
-            
-            # 사용자 위치 전송 타이머 중지
-            if self.udp_send_timer.isActive():
-                self.udp_send_timer.stop()
-            
-            # "로봇이 오고 있습니다..." 창 숨기기
-            self.robot_status_widget.hide()
+            if not self.robot_arrival_processed:
+                # 도착 이벤트를 처리했으므로 플래그를 True로 설정
+                self.robot_arrival_processed = True
+                
+                print("로봇 도착 신호 (999,999) 수신. [최초 1회 처리]")
+                
+                # 사용자 위치 전송 타이머 중지
+                if self.udp_send_timer.isActive():
+                    self.udp_send_timer.stop()
+                
+                # "로봇이 오고 있습니다..." 창 숨기기
+                self.robot_status_widget.hide()
 
-            # "로봇이 도착했습니다" 창 표시
-            self.arrival_prompt_widget.adjustSize()
-            self._update_popup_position(self.arrival_prompt_widget)
-            self.arrival_prompt_widget.show()
-            self.arrival_prompt_widget.raise_()
+                # "로봇이 도착했습니다" 창 표시
+                self.arrival_prompt_widget.adjustSize()
+                self._update_popup_position(self.arrival_prompt_widget)
+                self.arrival_prompt_widget.show()
+                self.arrival_prompt_widget.raise_()
 
     def load_stylesheet(self, filename):
         qss_file = QFile(filename);
