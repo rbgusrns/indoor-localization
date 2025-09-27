@@ -278,8 +278,8 @@ class IndoorPositioningApp(QWidget):
                     px_per_m_x = self.config.get('px_per_m_x', 1.0)
                     px_per_m_y = self.config.get('px_per_m_y', 1.0)
                     pts_meters = np.array([
-                        pts_pixels_qpoint.x() / px_per_m_x,
-                        pts_pixels_qpoint.y() / px_per_m_y
+                        pts_pixels_qpoint.x() * 19 / px_per_m_x,
+                        pts_pixels_qpoint.y() * 19 / px_per_m_y
                     ])
                     self.ekf.update(pts_meters) # ✅ 올바른 코드
 
