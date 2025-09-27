@@ -20,6 +20,7 @@ from bin import create_binary_map
 from Astar import find_path, create_distance_map
 from robot_tracker import RobotTrackerThread
 from lgbm_predictor import LGBM_Classifier_Predictor
+
 # --- UDP 수신 스레드 클래스 ---
 class UDPReceiverThread(QThread):
     message_received = pyqtSignal(str)
@@ -49,6 +50,12 @@ class IndoorPositioningApp(QWidget):
         self.rssi_mutex, self.rssi_data = QMutex(), {}
         self.current_speed, self.current_yaw, self.fused_pos = 0.0, 180.0, (0,0)
         self.target_room, self.last_start_grid, self.BLOCK_SIZE = None, None, 10
+
+        # --- ▼ [수정] 벽 회피 기능 파라미터 및 타이머 추가 ---
+        self.AVOIDANCE_THRESHOLD_GRID = 1.5  # 벽 회피를 시작할 거리 임계값 (그리드 단위)
+        self.REPULSION_STRENGTH = 0.4      # 위치를 밀어내는 힘의 강도 (튜닝 필요)
+        self.wall_avoidance_timer = QTimer(self)
+        # --- ▲ [수정] ---
 
         self.robot_arrival_processed = False
 
@@ -155,6 +162,11 @@ class IndoorPositioningApp(QWidget):
 
     def _connect_signals(self):
         self.ble_scanner_thread.detected.connect(self._on_ble_device_detected)
+        
+        # --- ▼ [수정] 벽 회피 타이머 신호 연결 추가 ---
+        self.wall_avoidance_timer.timeout.connect(self._apply_wall_avoidance)
+        # --- ▲ [수정] ---
+
         if self.serial_reader:
             self.serial_reader.heading_received.connect(self._on_yaw_update)
             self.serial_reader.speed_received.connect(self._on_speed_update)
@@ -172,6 +184,11 @@ class IndoorPositioningApp(QWidget):
 
     def _start_timers(self):
         self.rssi_clear_timer = QTimer(self); self.rssi_clear_timer.timeout.connect(self._clear_rssi_cache); self.rssi_clear_timer.start(2000)
+        
+        # --- ▼ [수정] 벽 회피 타이머 시작 추가 ---
+        self.wall_avoidance_timer.start(200) # 0.2초마다 벽과의 거리를 체크
+        # --- ▲ [수정] ---
+
         self.udp_receiver.start()
         self.robot_tracker.start()
 
@@ -429,6 +446,59 @@ class IndoorPositioningApp(QWidget):
     def grid_to_pixels(self, pos_grid):
         px, py = pos_grid[1] * self.BLOCK_SIZE + self.BLOCK_SIZE / 2, pos_grid[0] * self.BLOCK_SIZE + self.BLOCK_SIZE / 2
         return QPointF(px, py)
+        
+    # --- ▼ [추가] 벽 회피 로직을 적용하는 새로운 메소드 ---
+    def _apply_wall_avoidance(self):
+        """주기적으로 호출되어 현재 위치가 벽에 너무 가까우면 보정합니다."""
+        if self.fused_pos is None or self.distance_map is None:
+            return
+
+        # 1. 현재 위치(미터)를 그리드 좌표로 변환
+        current_grid = self.meters_to_grid(self.fused_pos)
+        row, col = current_grid
+        
+        # 2. 맵 경계 체크
+        height, width = self.distance_map.shape
+        if not (0 <= row < height and 0 <= col < width):
+            return
+
+        # 3. 벽과의 거리가 임계값보다 멀면 아무것도 하지 않음
+        distance_to_wall = self.distance_map[row][col]
+        if distance_to_wall >= self.AVOIDANCE_THRESHOLD_GRID:
+            return
+            
+        # 4. 벽에서 멀어지는 방향(그래디언트) 계산
+        #    경계 처리를 위해 min/max 사용
+        grad_r = self.distance_map[min(row + 1, height - 1)][col] - self.distance_map[max(row - 1, 0)][col]
+        grad_c = self.distance_map[row][min(col + 1, width - 1)] - self.distance_map[row][max(col - 1, 0)]
+        
+        repulsion_vector_grid = np.array([grad_c, grad_r]) # [dx, dy] 형태 (col이 x, row가 y)
+
+        # 5. 보정 벡터 정규화 및 강도 계산
+        norm = np.linalg.norm(repulsion_vector_grid)
+        if norm < 1e-6: # 그래디언트가 0에 가까우면 중단 (나눗셈 오류 방지)
+            return
+
+        direction_vector = repulsion_vector_grid / norm
+        
+        # 벽에 가까울수록(penetration_depth가 클수록) 더 강하게 밀어냄
+        penetration_depth = self.AVOIDANCE_THRESHOLD_GRID - distance_to_wall
+        correction_magnitude_grid = penetration_depth * self.REPULSION_STRENGTH
+        correction_vector_grid = direction_vector * correction_magnitude_grid
+
+        # 6. 보정 벡터를 그리드 단위에서 미터 단위로 변환
+        correction_m_x = correction_vector_grid[0] * self.BLOCK_SIZE / self.config['px_per_m_x']
+        correction_m_y = correction_vector_grid[1] * self.BLOCK_SIZE / self.config['px_per_m_y']
+        correction_vector_m = np.array([correction_m_x, correction_m_y])
+
+        # 7. 현재 위치에 보정 벡터 적용 및 EKF 상태 업데이트
+        self.fused_pos += correction_vector_m
+        self.ekf.x[:2] = self.fused_pos.reshape(2, 1) # EKF 내부 상태도 동기화
+        
+        # 8. 지도에 보정된 위치 즉시 반영
+        self.map_viewer.mark_estimated_position(*self.fused_pos, self.current_yaw)
+        print(f"벽 회피 적용: ({correction_m_x:.2f}, {correction_m_y:.2f})m 보정됨")
+    # --- ▲ [추가] ---
 
     def closeEvent(self, event):
         self.robot_tracker.stop()
@@ -437,8 +507,6 @@ class IndoorPositioningApp(QWidget):
         if self.serial_reader: self.serial_reader.stop()
         super().closeEvent(event)
 
-
-    
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
