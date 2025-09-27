@@ -1,11 +1,10 @@
 import json
 import pandas as pd
-import numpy as np  # NumPy를 임포트합니다.
+import numpy as np
 import lightgbm as lgb
-import joblib     # 모델 저장/불러오기를 위해 추가합니다.
+import joblib
 import warnings
 
-# 모델 성능 평가를 위해 추가합니다.
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
 
@@ -49,7 +48,7 @@ class LGBM_Classifier_Predictor:
         
         return X, y
 
-    def train(self, db_path="fingerprint_db_4dir.json", test_size=0.2):
+    def train(self, db_path="fingerprint_db_4dir.json", test_size=0.3): # [수정] test_size 기본값 변경
         """데이터를 불러와 LightGBM 분류 모델을 학습하고 정확도를 평가합니다."""
         X, y = self._prepare_data(db_path)
         if X is None:
@@ -77,19 +76,29 @@ class LGBM_Classifier_Predictor:
             print("오류: 모델이 학습되지 않았습니다. train() 또는 load_model()을 먼저 호출하세요.")
             return None
 
+        # [버그 수정 및 로직 개선]
+        # 1. 들어온 RSSI 데이터(딕셔너리)를 DataFrame으로 변환
         sanitized_live_data = {k.replace(':', '_'): v for k, v in live_rssi_vector.items()}
         live_df = pd.DataFrame([sanitized_live_data])
 
-        live_df_aligned = live_df.reindex(columns=self.feature_columns, fill_value=0)
-        
-        for col in self.beacon_columns:
-            if col not in sanitized_live_data:
-                live_df_aligned[col] = -100
+        # 2. 학습 시 사용된 모든 피처 컬럼을 생성하고, 누락된 비콘 기본값(-100)으로 채움
+        #    이렇게 하면 존재하지 않는 비콘과 방향 컬럼이 모두 생성됨
+        live_df_aligned = live_df.reindex(columns=self.feature_columns, fill_value=-100)
 
-        # ▼▼▼ [오류 해결] DataFrame을 NumPy 배열로 변환 ▼▼▼
-        live_array = live_df_aligned.to_numpy()
+        # 3. 방향(direction) 정보에 대해 One-Hot 인코딩을 수동으로 적용
+        #    먼저 모든 방향 컬럼을 0으로 초기화
+        for col in self.feature_columns:
+            if col.startswith('dir_'):
+                live_df_aligned[col] = 0
         
-        # 변환된 NumPy 배열로 예측을 수행합니다.
+        #    현재 방향에 해당하는 컬럼에만 1을 할당
+        if 'direction' in live_rssi_vector:
+            current_dir_col = f"dir_{live_rssi_vector['direction']}"
+            if current_dir_col in live_df_aligned.columns:
+                live_df_aligned[current_dir_col] = 1
+
+        # 4. DataFrame을 NumPy 배열로 변환하여 예측
+        live_array = live_df_aligned.to_numpy()
         predicted_label = self.model.predict(live_array)[0]
 
         return predicted_label
@@ -125,9 +134,10 @@ if __name__ == '__main__':
     # --- 1. 모델 학습 후 저장 (최초 한 번만 실행) ---
     print("--- 모델 학습 및 저장 단계 ---")
     predictor_trainer = LGBM_Classifier_Predictor()
-    predictor_trainer.train()
+    predictor_trainer.train() # test_size=0.3으로 실행됨
     predictor_trainer.save_model()
     print("-" * 30)
+
 
     # --- 2. 저장된 모델 불러와서 예측 (실제 사용할 때) ---
     print("\n--- 저장된 모델 로드 및 예측 단계 ---")
