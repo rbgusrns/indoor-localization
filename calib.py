@@ -20,8 +20,8 @@ grid_width = 8
 grid_height = 6
 BEACON_COUNT = 6
 # 미터 → 픽셀 스케일 계산
-px_per_m_x = map_px_width  / room_width_m    
-px_per_m_y = map_px_height / room_height_m  
+px_per_m_x = map_px_width  / room_width_m    #190
+px_per_m_y = map_px_height / room_height_m   #190
 
 # 그리드 1칸 (m)
 cell_m_x = room_width_m  / grid_width   
