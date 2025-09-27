@@ -1,15 +1,26 @@
-#핑거프린팅 캘리브래이션 파일.
+# 핑거프린팅 캘리브래이션 파일 (4방향 지원 버전)
 
 import sys
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QGraphicsEllipseItem, QGraphicsPixmapItem, QShortcut
-from PyQt5.QtCore import Qt, QRectF
-from PyQt5.QtGui import QPixmap, QKeySequence
+import os
+from PyQt5.QtCore import QCoreApplication, Qt, QRectF
+from PyQt5.QtGui import QPixmap, QKeySequence, QColor
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QGraphicsEllipseItem, QGraphicsPixmapItem, QShortcut
 
+# --- 다른 모듈 import (실제 환경에 맞게 경로 설정 필요) ---
 from app_config import load_config
 from ble_scanner import BLEScanThread
 from trilateration import KalmanFilter
 from fingerprinting import FingerprintDB
 from map_viewer import MapViewer
+
+# --- 이 코드를 스크립트 최상단에 추가 (Qt 플러그인 오류 방지) ---
+try:
+    pyqt_dir = os.path.dirname(sys.modules['PyQt5'].__file__)
+    plugin_path = os.path.join(pyqt_dir, "Qt5", "plugins")
+    QCoreApplication.addLibraryPath(plugin_path)
+except Exception as e:
+    print(f"Qt 플러그인 경로 설정 중 오류 발생: {e}")
+# ---------------------------------------------------------
 
 # 맵, 룸 크기, 그리드 설정
 map_px_width = 762
@@ -19,48 +30,75 @@ room_height_m = 3
 grid_width = 8
 grid_height = 6
 BEACON_COUNT = 6
-# 미터 → 픽셀 스케일 계산
-px_per_m_x = map_px_width  / room_width_m    #190
-px_per_m_y = map_px_height / room_height_m   #190
 
-# 그리드 1칸 (m)
-cell_m_x = room_width_m  / grid_width   
-cell_m_y = room_height_m / grid_height  
+px_per_m_x = map_px_width / room_width_m
+px_per_m_y = map_px_height / room_height_m
 
-class CalibViewer(MapViewer): # 맵을 띄우고, 셀의좌표를 입력받아 그 중앙을 띄우는 클래스.
+cell_m_x = room_width_m / grid_width
+cell_m_y = room_height_m / grid_height
+
+
+class CalibViewer(MapViewer):
     def __init__(self, map_path, px_per_m_x, px_per_m_y):
         super().__init__(map_path, px_per_m_x, px_per_m_y)
         self.cfg = load_config()
         self.px_per_m_x = self.cfg['px_per_m_x']
         self.px_per_m_y = self.cfg['px_per_m_y']
-        # 맵 이미지 로드
+        
         pixmap = QPixmap(map_path)
         if pixmap.isNull():
             print(f"맵 파일 로드 실패: {map_path}")
-        else:
-            item = QGraphicsPixmapItem(pixmap) #지도를 아이템화
-            self.scene.addItem(item) #씬에 지도 추가
-            self.scene.setSceneRect(QRectF(pixmap.rect())) #씬의 크기를 맵 이미지 크기로 설정
-            #self.setMinimumSize(int(pixmap.width()), int(pixmap.height())) #창의 최소 크기를 이미지 크기만큼 보장
-        self.fitInView(self.scene.sceneRect(), Qt.KeepAspectRatio) #비율 유지하게, 꽉차도록 조정.
-        self.calib_marker = None
+            sys.exit(1)
+        
+        item = QGraphicsPixmapItem(pixmap)
+        self.scene.addItem(item)
+        self.scene.setSceneRect(QRectF(pixmap.rect()))
+        self.fitInView(self.scene.sceneRect(), Qt.KeepAspectRatio)
 
-    def mark_calibration_point(self, x, y): #(0,0) ~ (7,4)까지의 셀을 받아 그 중앙을 표시하는 메서드
+        self.calib_marker = None
+        self.completed_markers = []
+
+    # --- 변경된 부분: 시각적 피드백 강화 ---
+    def mark_calibration_point(self, x, y, direction, completed_directions):
+        # 기존 마커 모두 삭제
         if self.calib_marker:
             self.scene.removeItem(self.calib_marker)
-        # 셀 크기(px) 계산
+        for marker in self.completed_markers:
+            self.scene.removeItem(marker)
+        self.completed_markers.clear()
+
         cell_px_x = cell_m_x * self.px_per_m_x
         cell_px_y = cell_m_y * self.px_per_m_y
-        cell_size_px = min(cell_px_x, cell_px_y)
-        radius = cell_size_px * 0.1
-        # 좌표 → 픽셀 변환
+        
+        # --- 1. 완료된 방향을 회색 점으로 표시 ---
+        for completed_dir in completed_directions:
+            offset_x, offset_y = 0, 0
+            radius_small = (min(cell_px_x, cell_px_y)) * 0.05
+            if completed_dir == 'N': offset_y = -cell_px_y * 0.25
+            elif completed_dir == 'S': offset_y = cell_px_y * 0.25
+            elif completed_dir == 'W': offset_x = -cell_px_x * 0.25
+            elif completed_dir == 'E': offset_x = cell_px_x * 0.25
+            
+            px_center = x * cell_px_x + cell_px_x / 2
+            py_center = y * cell_px_y + cell_px_y / 2
+            
+            comp_marker = QGraphicsEllipseItem(px_center + offset_x - radius_small, py_center + offset_y - radius_small, radius_small * 2, radius_small * 2)
+            comp_marker.setBrush(Qt.gray)
+            comp_marker.setZValue(11)
+            self.scene.addItem(comp_marker)
+            self.completed_markers.append(comp_marker)
+
+        # --- 2. 현재 선택된 방향을 색깔있는 큰 점으로 표시 ---
+        colors = {'N': Qt.blue, 'E': Qt.green, 'S': Qt.red, 'W': QColor('orange')}
+        radius_large = (min(cell_px_x, cell_px_y)) * 0.1
         px = x * cell_px_x + cell_px_x/2
-        py = y * cell_px_y + cell_px_y/2 #점의 위치를 셀의 중앙으로.
-        marker = QGraphicsEllipseItem(px - radius, py - radius, radius*2, radius*2) #아이템 만들고
-        marker.setBrush(Qt.blue)
-        marker.setZValue(10)
-        self.scene.addItem(marker) #추가
-        self.calib_marker = marker
+        py = y * cell_px_y + cell_px_y/2
+        
+        self.calib_marker = QGraphicsEllipseItem(px - radius_large, py - radius_large, radius_large * 2, radius_large * 2)
+        self.calib_marker.setBrush(colors.get(direction, Qt.black))
+        self.calib_marker.setZValue(10)
+        self.scene.addItem(self.calib_marker)
+
 
 class CalibrationWindow(QWidget):
     def __init__(self):
@@ -71,80 +109,115 @@ class CalibrationWindow(QWidget):
         self.thread = BLEScanThread(self.cfg, self.kf)
         self.thread.detected.connect(self.on_scan)
 
-        # 그리드 및 상태 변수
-        self.grid_width  = grid_width
+        self.grid_width = grid_width
         self.grid_height = grid_height
         self.current_x = 0
         self.current_y = 0
-        # 임시 RSSI 벡터 저장소
+        
+        # --- 추가된 부분: 방향 상태 변수 ---
+        self.directions = ['N', 'E', 'S', 'W']
+        self.current_direction = self.directions[0]
+        self.completed_directions = set()
+
         self.tmp_vec = {}
 
         map_path = self.cfg.get('map_file', 'map.png')
         self.viewer = CalibViewer(map_path, px_per_m_x, px_per_m_y)
-        self.viewer.mark_calibration_point(self.current_x, self.current_y)
+        self.update_marker()
         self.setFocusPolicy(Qt.StrongFocus)
 
-        scan_F = QShortcut(QKeySequence("G"), self.viewer)
-        scan_F.activated.connect(
-            lambda: (
-                print(f"pos: {self.current_x},{self.current_y} START!!") or self.thread.start()
-                if not self.thread.isRunning()
-                else None
-            )
-        )
-        
-        stop_F = QShortcut(QKeySequence("X"), self.viewer)
-        stop_F.activated.connect(lambda: self.thread.stop() if self.thread.isRunning() else None)
-        
-        next_F = QShortcut(QKeySequence("N"), self.viewer) 
-        next_F.activated.connect(lambda: self.next_point() if not self.thread.isRunning() else None)
-        
-        finish_F = QShortcut(QKeySequence("Q"), self.viewer)
-        finish_F.activated.connect(lambda: self.finish() if not self.thread.isRunning() else None)
+        self.setup_shortcuts()
         
         layout = QVBoxLayout(self)
         layout.addWidget(self.viewer)
         self.setLayout(layout)
-        self.setWindowTitle("Fingerprint Calibration")
-        #self.showFullScreen()
+        self.setWindowTitle("Fingerprint Calibration (4-Direction)")
 
-    def next_point(self):
-        self.current_x += 1
-        if self.current_x >= self.grid_width:
-            self.current_x = 0
-            self.current_y += 1
-            if self.current_y >= self.grid_height:
-                self.current_y = 0
-        # 다음 지점 준비: 임시 벡터 초기화
-        self.tmp_vec.clear()
-        self.viewer.mark_calibration_point(self.current_x, self.current_y)
-        self.viewer.fitInView(self.viewer.scene.sceneRect(), Qt.KeepAspectRatio)
+    def setup_shortcuts(self):
+        QShortcut(QKeySequence("G"), self).activated.connect(self.start_scan)
+        QShortcut(QKeySequence("X"), self).activated.connect(self.stop_scan)
+        QShortcut(QKeySequence("N"), self).activated.connect(self.move_to_next_point)
+        QShortcut(QKeySequence("Q"), self).activated.connect(self.finish)
+        
+        # --- 추가된 부분: 방향키 단축키 ---
+        QShortcut(QKeySequence(Qt.Key_Up), self).activated.connect(lambda: self.change_direction('N'))
+        QShortcut(QKeySequence(Qt.Key_Down), self).activated.connect(lambda: self.change_direction('S'))
+        QShortcut(QKeySequence(Qt.Key_Left), self).activated.connect(lambda: self.change_direction('W'))
+        QShortcut(QKeySequence(Qt.Key_Right), self).activated.connect(lambda: self.change_direction('E'))
+
+    def update_marker(self):
+        self.viewer.mark_calibration_point(self.current_x, self.current_y, self.current_direction, self.completed_directions)
+
+    # --- 추가된 부분: 방향 변경 메서드 ---
+    def change_direction(self, direction):
+        if not self.thread.isRunning() and direction in self.directions:
+            self.current_direction = direction
+            print(f"Direction changed to: {self.current_direction}")
+            self.update_marker()
+
+    def start_scan(self):
+        # 이미 측정한 방향은 다시 측정하지 않음
+        if not self.thread.isRunning() and self.current_direction not in self.completed_directions:
+            print(f"pos: ({self.current_x},{self.current_y}), dir: {self.current_direction} - SCAN START!!")
+            self.thread.start()
+
+    def stop_scan(self):
+        if self.thread.isRunning():
+            self.thread.stop()
+            print("Scan stopped by user.")
+
+    def move_to_next_point(self):
+        if not self.thread.isRunning():
+            self.current_x += 1
+            if self.current_x >= self.grid_width:
+                self.current_x = 0
+                self.current_y += 1
+                if self.current_y >= self.grid_height:
+                    self.current_y = 0
+            
+            # --- 변경된 부분: 다음 지점 초기화 ---
+            self.completed_directions.clear()
+            self.current_direction = self.directions[0]
+            self.tmp_vec.clear()
+            self.update_marker()
+            print(f"--- Moved to next point: ({self.current_x}, {self.current_y}) ---")
 
     def on_scan(self, vec):
-        self.tmp_vec.update(vec) # vec는 {mac: rssi} 형태로 들어옴. 딕셔너리에 .update하면 추가되거나 수정.
+        self.tmp_vec.update(vec)
 
-        # 특정 개수 이상 수집될때까지 대기하다가, 도달하면 저장함.
-        if len(self.tmp_vec) >= BEACON_COUNT: 
-            pos = (self.current_x, self.current_y) #현재 셀 위치
-            collected = self.fpdb.collect(pos, self.tmp_vec.copy()) #현재 셀 좌표, 특정 개수 이상의 RSSI 딕셔너리 넘김
-            #print(f"Collected @ {pos}: {self.tmp_vec}")
+        if len(self.tmp_vec) >= BEACON_COUNT:
+            pos_key = (self.current_x, self.current_y, self.current_direction)
+            collected = self.fpdb.collect(pos_key, self.tmp_vec.copy())
             self.tmp_vec.clear()
 
             if collected:
-                print(f"저장 완료 @ {pos} (샘플 누적됨)")
+                print(f"저장 완료 @ {pos_key} (샘플 누적됨)")
                 self.thread.stop()
-                self.next_point()
-
-
-
+                
+                # --- 변경된 부분: 다음 방향 자동 선택 또는 다음 지점 이동 ---
+                self.completed_directions.add(self.current_direction)
+                
+                # 아직 현재 위치에서 측정할 방향이 남았는지 확인
+                remaining_dirs = [d for d in self.directions if d not in self.completed_directions]
+                
+                if remaining_dirs:
+                    # 다음 측정할 방향으로 자동 변경
+                    self.change_direction(remaining_dirs[0])
+                else:
+                    # 4방향 모두 완료되면 다음 지점으로 이동
+                    print(f"All directions completed for ({self.current_x}, {self.current_y}). Moving to the next point.")
+                    self.move_to_next_point()
+                
+                self.update_marker()
 
     def finish(self):
-        self.thread.stop()
-        self.fpdb.build_index()
-        path = self.cfg.get('fingerprint_db_path', 'fingerprint_db.json')
-        self.fpdb.save(path)
-        print("Calibration complete, DB saved to", path)
-        QApplication.instance().quit()
+        if not self.thread.isRunning():
+            self.thread.stop()
+            self.fpdb.build_index()
+            path = self.cfg.get('fingerprint_db_path', 'fingerprint_db_4dir.json')
+            self.fpdb.save(path)
+            print(f"Calibration complete, DB saved to {path}")
+            QApplication.instance().quit()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
