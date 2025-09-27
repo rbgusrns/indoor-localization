@@ -76,11 +76,14 @@ class LGBM_Classifier_Predictor:
             print("오류: 모델이 학습되지 않았습니다. train() 또는 load_model()을 먼저 호출하세요.")
             return None
 
+        # 1. 실시간 데이터를 DataFrame으로 변환
         sanitized_live_data = {k.replace(':', '_'): v for k, v in live_rssi_vector.items()}
         live_df = pd.DataFrame([sanitized_live_data])
 
+        # 2. 학습된 컬럼 순서에 맞게 DataFrame을 재구성하고 기본값(-100) 설정
         live_df_aligned = live_df.reindex(columns=self.feature_columns, fill_value=-100)
 
+        # 3. 방향(direction) 정보 One-Hot 인코딩 수동 적용
         for col in self.feature_columns:
             if col.startswith('dir_'):
                 live_df_aligned[col] = 0
@@ -90,21 +93,10 @@ class LGBM_Classifier_Predictor:
             if current_dir_col in live_df_aligned.columns:
                 live_df_aligned[current_dir_col] = 1
 
-        live_array = live_df_aligned.to_numpy()
-        
-        # ▼▼▼ [디버깅 코드 추가] ▼▼▼
-        # 모델에 데이터가 들어가기 직전, 상태를 확인합니다.
-        print("\n---[디버깅 정보]---")
-        print(f"예측 직전 데이터의 타입: {type(live_array)}")
-        # hasattr 함수로 'shape' 속성이 있는지 확인 후 출력합니다.
-        if hasattr(live_array, 'shape'):
-            print(f"데이터의 형태 (shape): {live_array.shape}")
-        else:
-            print("데이터에 'shape' 속성이 없습니다.")
-        print("--------------------\n")
-        # ▲▲▲ [디버깅 코드 추가] ▲▲▲
-
-        predicted_label = self.model.predict(live_array)[0]
+        # ▼▼▼ [최종 수정] NumPy 배열로 변환하지 않고 DataFrame을 그대로 사용 ▼▼▼
+        # 모델이 학습 시 DataFrame의 컬럼명을 기억하고 있으므로,
+        # 예측 시에도 DataFrame을 그대로 전달하는 것이 가장 안정적입니다.
+        predicted_label = self.model.predict(live_df_aligned)[0]
 
         return predicted_label
 
