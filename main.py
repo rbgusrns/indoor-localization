@@ -274,11 +274,14 @@ class IndoorPositioningApp(QWidget):
                     pts_pixels_qpoint = self.grid_to_pixels(pts_grid)
                     pts_pixels = np.array([pts_pixels_qpoint.x(), pts_pixels_qpoint.y()])
 
-                    # 3. '픽셀' 단위의 좌표를 EKF에 업데이트
-                    self.ekf.update(pts_pixels)
+                    px_per_m_x = self.config.get('px_per_m_x', 1.0)
+                    px_per_m_y = self.config.get('px_per_m_y', 1.0)
+                    pts_meters = np.array([
+                        pts_pixels_qpoint.x() / px_per_m_x,
+                        pts_pixels_qpoint.y() / px_per_m_y
+                    ])
+                    self.ekf.update(pts_meters) # ✅ 올바른 코드
 
-                    # 4. EKF 업데이트 (이 부분은 그대로 사용)
-                    self.ekf.update(np.array([pts_grid[0], pts_grid[1]]))
                     self.fused_pos = self.ekf.get_state()[:2]
                     print(self.fused_pos)
                     self.map_viewer.mark_estimated_position(*self.fused_pos, self.current_yaw)
@@ -286,6 +289,7 @@ class IndoorPositioningApp(QWidget):
 
                 except Exception as e:
                     print(f"LGBM 예측 중 오류 발생: {e}")
+
 
     def _on_speed_update(self, speed):
         self.current_speed = speed; self.ekf.predict(self.current_yaw, self.current_speed); self.fused_pos = self.ekf.get_state()[:2]
