@@ -76,29 +76,34 @@ class LGBM_Classifier_Predictor:
             print("오류: 모델이 학습되지 않았습니다. train() 또는 load_model()을 먼저 호출하세요.")
             return None
 
-        # [버그 수정 및 로직 개선]
-        # 1. 들어온 RSSI 데이터(딕셔너리)를 DataFrame으로 변환
         sanitized_live_data = {k.replace(':', '_'): v for k, v in live_rssi_vector.items()}
         live_df = pd.DataFrame([sanitized_live_data])
 
-        # 2. 학습 시 사용된 모든 피처 컬럼을 생성하고, 누락된 비콘 기본값(-100)으로 채움
-        #    이렇게 하면 존재하지 않는 비콘과 방향 컬럼이 모두 생성됨
         live_df_aligned = live_df.reindex(columns=self.feature_columns, fill_value=-100)
 
-        # 3. 방향(direction) 정보에 대해 One-Hot 인코딩을 수동으로 적용
-        #    먼저 모든 방향 컬럼을 0으로 초기화
         for col in self.feature_columns:
             if col.startswith('dir_'):
                 live_df_aligned[col] = 0
         
-        #    현재 방향에 해당하는 컬럼에만 1을 할당
         if 'direction' in live_rssi_vector:
             current_dir_col = f"dir_{live_rssi_vector['direction']}"
             if current_dir_col in live_df_aligned.columns:
                 live_df_aligned[current_dir_col] = 1
 
-        # 4. DataFrame을 NumPy 배열로 변환하여 예측
         live_array = live_df_aligned.to_numpy()
+        
+        # ▼▼▼ [디버깅 코드 추가] ▼▼▼
+        # 모델에 데이터가 들어가기 직전, 상태를 확인합니다.
+        print("\n---[디버깅 정보]---")
+        print(f"예측 직전 데이터의 타입: {type(live_array)}")
+        # hasattr 함수로 'shape' 속성이 있는지 확인 후 출력합니다.
+        if hasattr(live_array, 'shape'):
+            print(f"데이터의 형태 (shape): {live_array.shape}")
+        else:
+            print("데이터에 'shape' 속성이 없습니다.")
+        print("--------------------\n")
+        # ▲▲▲ [디버깅 코드 추가] ▲▲▲
+
         predicted_label = self.model.predict(live_array)[0]
 
         return predicted_label
