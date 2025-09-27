@@ -241,13 +241,13 @@ class IndoorPositioningApp(QWidget):
     def _get_direction_from_yaw(self, yaw):
         """Yaw 각도를 N, E, S, W 방향으로 변환합니다."""
         if 45 <= yaw < 135:
-            return 'W'
-        elif 135 <= yaw < 225:
             return 'S'
+        elif 135 <= yaw < 225:
+            return 'W'
         elif 225 <= yaw < 315:
-            return 'E'
-        else: # 315 <= yaw or yaw < 45
             return 'N'
+        else: # 315 <= yaw or yaw < 45
+            return 'E'
 
     def _on_ble_device_detected(self, rssi_vec):
         self.rssi_mutex.lock()
