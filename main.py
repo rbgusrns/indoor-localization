@@ -289,6 +289,7 @@ class IndoorPositioningApp(QWidget):
 
     def _on_speed_update(self, speed):
         self.current_speed = speed; self.ekf.predict(self.current_yaw, self.current_speed); self.fused_pos = self.ekf.get_state()[:2]
+        print(self.fused_pos)
         self._update_navigation_path()
 
     def _on_yaw_update(self, yaw):
