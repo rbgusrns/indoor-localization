@@ -1,10 +1,10 @@
-# 핑거프린팅 캘리브래이션 파일 (4방향 지원 버전)
+# 핑거프린팅 캘리브래이션 파일 (4방향 및 버튼 지원 버전)
 
 import sys
 import os
 from PyQt5.QtCore import QCoreApplication, Qt, QRectF
 from PyQt5.QtGui import QPixmap, QKeySequence, QColor
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QGraphicsEllipseItem, QGraphicsPixmapItem, QShortcut
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QGraphicsEllipseItem, QGraphicsPixmapItem, QShortcut
 
 # --- 다른 모듈 import (실제 환경에 맞게 경로 설정 필요) ---
 from app_config import load_config
@@ -58,9 +58,7 @@ class CalibViewer(MapViewer):
         self.calib_marker = None
         self.completed_markers = []
 
-    # --- 변경된 부분: 시각적 피드백 강화 ---
     def mark_calibration_point(self, x, y, direction, completed_directions):
-        # 기존 마커 모두 삭제
         if self.calib_marker:
             self.scene.removeItem(self.calib_marker)
         for marker in self.completed_markers:
@@ -70,7 +68,6 @@ class CalibViewer(MapViewer):
         cell_px_x = cell_m_x * self.px_per_m_x
         cell_px_y = cell_m_y * self.px_per_m_y
         
-        # --- 1. 완료된 방향을 회색 점으로 표시 ---
         for completed_dir in completed_directions:
             offset_x, offset_y = 0, 0
             radius_small = (min(cell_px_x, cell_px_y)) * 0.05
@@ -88,7 +85,6 @@ class CalibViewer(MapViewer):
             self.scene.addItem(comp_marker)
             self.completed_markers.append(comp_marker)
 
-        # --- 2. 현재 선택된 방향을 색깔있는 큰 점으로 표시 ---
         colors = {'N': Qt.blue, 'E': Qt.green, 'S': Qt.red, 'W': QColor('orange')}
         radius_large = (min(cell_px_x, cell_px_y)) * 0.1
         px = x * cell_px_x + cell_px_x/2
@@ -114,7 +110,6 @@ class CalibrationWindow(QWidget):
         self.current_x = 0
         self.current_y = 0
         
-        # --- 추가된 부분: 방향 상태 변수 ---
         self.directions = ['N', 'E', 'S', 'W']
         self.current_direction = self.directions[0]
         self.completed_directions = set()
@@ -130,6 +125,13 @@ class CalibrationWindow(QWidget):
         
         layout = QVBoxLayout(self)
         layout.addWidget(self.viewer)
+
+        # --- 추가된 부분: 스캔 시작 버튼 생성 및 레이아웃 추가 ---
+        self.scan_button = QPushButton("Start Scan (G)")
+        self.scan_button.clicked.connect(self.start_scan)
+        layout.addWidget(self.scan_button)
+        # ---------------------------------------------------
+
         self.setLayout(layout)
         self.setWindowTitle("Fingerprint Calibration (4-Direction)")
 
@@ -139,7 +141,6 @@ class CalibrationWindow(QWidget):
         QShortcut(QKeySequence("N"), self).activated.connect(self.move_to_next_point)
         QShortcut(QKeySequence("Q"), self).activated.connect(self.finish)
         
-        # --- 추가된 부분: 방향키 단축키 ---
         QShortcut(QKeySequence(Qt.Key_Up), self).activated.connect(lambda: self.change_direction('N'))
         QShortcut(QKeySequence(Qt.Key_Down), self).activated.connect(lambda: self.change_direction('S'))
         QShortcut(QKeySequence(Qt.Key_Left), self).activated.connect(lambda: self.change_direction('W'))
@@ -148,7 +149,6 @@ class CalibrationWindow(QWidget):
     def update_marker(self):
         self.viewer.mark_calibration_point(self.current_x, self.current_y, self.current_direction, self.completed_directions)
 
-    # --- 추가된 부분: 방향 변경 메서드 ---
     def change_direction(self, direction):
         if not self.thread.isRunning() and direction in self.directions:
             self.current_direction = direction
@@ -156,14 +156,15 @@ class CalibrationWindow(QWidget):
             self.update_marker()
 
     def start_scan(self):
-        # 이미 측정한 방향은 다시 측정하지 않음
         if not self.thread.isRunning() and self.current_direction not in self.completed_directions:
             print(f"pos: ({self.current_x},{self.current_y}), dir: {self.current_direction} - SCAN START!!")
             self.thread.start()
+            self.scan_button.setEnabled(False) # --- 수정된 부분: 버튼 비활성화 ---
 
     def stop_scan(self):
         if self.thread.isRunning():
             self.thread.stop()
+            self.scan_button.setEnabled(True) # --- 수정된 부분: 버튼 활성화 ---
             print("Scan stopped by user.")
 
     def move_to_next_point(self):
@@ -175,7 +176,6 @@ class CalibrationWindow(QWidget):
                 if self.current_y >= self.grid_height:
                     self.current_y = 0
             
-            # --- 변경된 부분: 다음 지점 초기화 ---
             self.completed_directions.clear()
             self.current_direction = self.directions[0]
             self.tmp_vec.clear()
@@ -193,18 +193,15 @@ class CalibrationWindow(QWidget):
             if collected:
                 print(f"저장 완료 @ {pos_key} (샘플 누적됨)")
                 self.thread.stop()
+                self.scan_button.setEnabled(True) # --- 수정된 부분: 버튼 활성화 ---
                 
-                # --- 변경된 부분: 다음 방향 자동 선택 또는 다음 지점 이동 ---
                 self.completed_directions.add(self.current_direction)
                 
-                # 아직 현재 위치에서 측정할 방향이 남았는지 확인
                 remaining_dirs = [d for d in self.directions if d not in self.completed_directions]
                 
                 if remaining_dirs:
-                    # 다음 측정할 방향으로 자동 변경
                     self.change_direction(remaining_dirs[0])
                 else:
-                    # 4방향 모두 완료되면 다음 지점으로 이동
                     print(f"All directions completed for ({self.current_x}, {self.current_y}). Moving to the next point.")
                     self.move_to_next_point()
                 
