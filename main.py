@@ -1,3 +1,4 @@
+import joblib
 import sys
 import serial
 import time
@@ -18,7 +19,7 @@ from event import SelectionDialog
 from bin import create_binary_map
 from Astar import find_path, create_distance_map
 from robot_tracker import RobotTrackerThread
-
+from lgbm_predictor import LGBM_Classifier_Predictor
 # --- UDP 수신 스레드 클래스 ---
 class UDPReceiverThread(QThread):
     message_received = pyqtSignal(str)
@@ -65,7 +66,13 @@ class IndoorPositioningApp(QWidget):
         else: 
             self.close()
         self.ekf = EKF(self.config.get('ekf_dt', 1.0))
-        self.fingerprint_db = FingerprintDB(); self.fingerprint_db.load(self.config.get('fingerprint_db_path', 'fingerprint_db.json'))
+        try:
+            # [수정] 파일 이름 변경 및 객체 이름 변경
+            self.lgbm_predictor = joblib.load('lgbm_predictor.pkl')
+            print("저장된 LGBM Predictor 객체를 성공적으로 불러왔습니다.")
+        except FileNotFoundError:
+            print("오류: 저장된 Predictor 파일(lgbm_predictor.pkl)을 찾을 수 없습니다.")
+            self.lgbm_predictor = None
         self.ble_scanner_thread = BLEScanThread(self.config)
         try:
             imu_port, baudrate = self.config.get('imu_port', '/dev/ttyUSB0'), self.config.get('imu_baudrate', 115200)
@@ -231,12 +238,54 @@ class IndoorPositioningApp(QWidget):
         path_pixels = [self.grid_to_pixels(pos) for pos in path_grid] if path_grid else None
         self.map_viewer.draw_path(path_pixels)
     
+    def _get_direction_from_yaw(self, yaw):
+        """Yaw 각도를 N, E, S, W 방향으로 변환합니다."""
+        if 45 <= yaw < 135:
+            return 'W'
+        elif 135 <= yaw < 225:
+            return 'S'
+        elif 225 <= yaw < 315:
+            return 'E'
+        else: # 315 <= yaw or yaw < 45
+            return 'N'
+
     def _on_ble_device_detected(self, rssi_vec):
-        self.rssi_mutex.lock(); self.rssi_data.update(rssi_vec); local_rssi_copy = self.rssi_data.copy(); self.rssi_mutex.unlock()
+        self.rssi_mutex.lock()
+        self.rssi_data.update(rssi_vec)
+        local_rssi_copy = self.rssi_data.copy()
+        self.rssi_mutex.unlock()
+
         if len(local_rssi_copy) >= 6:
-            pts, _, _ = self.fingerprint_db.get_position(local_rssi_copy, k=self.config['k_neighbors'])
-            self.ekf.update(np.array([pts[0], pts[1]])); self.fused_pos = self.ekf.get_state()[:2]
-            self.map_viewer.mark_estimated_position(*self.fused_pos, self.current_yaw); self._update_navigation_path()
+            if self.lgbm_predictor:
+                try:
+                    # 1. IMU 센서에서 받은 Yaw 값으로 현재 방향('N' 등)을 결정합니다.
+                    direction = self._get_direction_from_yaw(self.current_yaw)
+                    local_rssi_copy['direction'] = direction
+
+                    # 2. Predictor 객체의 predict 메소드를 호출합니다. (내부에서 모든 전처리 수행)
+                    predicted_label = self.lgbm_predictor.predict(local_rssi_copy)
+                    
+                    # 3. 예측된 레이블('x_y')을 좌표로 변환합니다.
+                    x_str, y_str = predicted_label.split('_')
+                    pts_grid = (int(y_str) // 2 , int(x_str) // 2) # Astar는 (row, col) 순서일 수 있으므로 확인 필요
+
+                    # 2. [핵심] 그리드 좌표를 '픽셀' 좌표로 변환
+                    # QPointF를 numpy array로 바꿔서 EKF에 전달
+                    pts_pixels_qpoint = self.grid_to_pixels(pts_grid)
+                    pts_pixels = np.array([pts_pixels_qpoint.x(), pts_pixels_qpoint.y()])
+
+                    # 3. '픽셀' 단위의 좌표를 EKF에 업데이트
+                    self.ekf.update(pts_pixels)
+
+                    # 4. EKF 업데이트 (이 부분은 그대로 사용)
+                    self.ekf.update(np.array([pts_grid[0], pts_grid[1]]))
+                    self.fused_pos = self.ekf.get_state()[:2]
+                    print(self.fused_pos)
+                    self.map_viewer.mark_estimated_position(*self.fused_pos, self.current_yaw)
+                    self._update_navigation_path()
+
+                except Exception as e:
+                    print(f"LGBM 예측 중 오류 발생: {e}")
 
     def _on_speed_update(self, speed):
         self.current_speed = speed; self.ekf.predict(self.current_yaw, self.current_speed); self.fused_pos = self.ekf.get_state()[:2]
@@ -380,6 +429,9 @@ class IndoorPositioningApp(QWidget):
         self.ble_scanner_thread.stop()
         if self.serial_reader: self.serial_reader.stop()
         super().closeEvent(event)
+
+
+    
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
