@@ -55,8 +55,6 @@ class LGBM_Classifier_Predictor:
         if X is None:
             return
 
-        # 데이터를 학습용과 검증용으로 분리합니다.
-        # stratify=y 옵션은 각 위치 레이블의 비율을 유지하며 분리해 안정성을 높입니다.
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=test_size, random_state=42, stratify=y
         )
@@ -67,12 +65,10 @@ class LGBM_Classifier_Predictor:
         self.model.fit(X_train, y_train)
         print("위치 분류 모델 학습 완료.")
         
-        # 검증용 데이터로 예측 및 정확도를 평가하여 모델 성능을 확인합니다.
         y_pred = self.model.predict(X_test)
         accuracy = accuracy_score(y_test, y_pred)
         print(f"✅ 모델 검증 정확도: {accuracy:.4f}")
         
-        # 모델이 예측 시 사용할 최종 피처 컬럼 순서를 저장합니다.
         self.feature_columns = X.columns
 
     def predict(self, live_rssi_vector):
@@ -81,22 +77,16 @@ class LGBM_Classifier_Predictor:
             print("오류: 모델이 학습되지 않았습니다. train() 또는 load_model()을 먼저 호출하세요.")
             return None
 
-        # 1. 입력된 딕셔너리를 DataFrame으로 변환
         sanitized_live_data = {k.replace(':', '_'): v for k, v in live_rssi_vector.items()}
         live_df = pd.DataFrame([sanitized_live_data])
 
-        # 2. 학습된 컬럼 순서에 맞게 DataFrame을 재구성 (reindex)
-        #    - 학습 시 없었던 비콘/방향 정보가 들어와도 무시되고,
-        #    - 학습 시 있었지만 지금은 없는 정보는 fill_value로 채워집니다.
         live_df_aligned = live_df.reindex(columns=self.feature_columns, fill_value=0)
         
-        # 3. 누락된 비콘 신호의 기본값(-100)을 다시 채워줍니다.
         for col in self.beacon_columns:
             if col not in sanitized_live_data:
                 live_df_aligned[col] = -100
 
         # ▼▼▼ [오류 해결] DataFrame을 NumPy 배열로 변환 ▼▼▼
-        # 모델은 .shape 속성이 있는 NumPy 배열을 기대하므로, 예측 직전에 변환합니다.
         live_array = live_df_aligned.to_numpy()
         
         # 변환된 NumPy 배열로 예측을 수행합니다.
@@ -131,20 +121,18 @@ class LGBM_Classifier_Predictor:
             print(f"오류: '{path}' 파일을 찾을 수 없습니다. train()을 먼저 실행하세요.")
             return False
 
-# --- 사용 예시 ---
 if __name__ == '__main__':
     # --- 1. 모델 학습 후 저장 (최초 한 번만 실행) ---
     print("--- 모델 학습 및 저장 단계 ---")
     predictor_trainer = LGBM_Classifier_Predictor()
     predictor_trainer.train()
-    predictor_trainer.save_model() # 학습된 모델을 파일로 저장
+    predictor_trainer.save_model()
     print("-" * 30)
-
 
     # --- 2. 저장된 모델 불러와서 예측 (실제 사용할 때) ---
     print("\n--- 저장된 모델 로드 및 예측 단계 ---")
     predictor_user = LGBM_Classifier_Predictor()
-    is_loaded = predictor_user.load_model() # 파일에서 모델 로드
+    is_loaded = predictor_user.load_model()
 
     if is_loaded:
         live_data = {
