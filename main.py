@@ -298,7 +298,7 @@ class IndoorPositioningApp(QWidget):
 
     def _on_yaw_update(self, yaw):
         self.current_yaw = yaw; self.map_viewer.move_to(*self.fused_pos, self.current_yaw)
-        print(self.fused_pos)
+        print(self.current_yaw)
 
     def _clear_rssi_cache(self):
         self.rssi_mutex.lock(); self.rssi_data.clear(); self.rssi_mutex.unlock()
@@ -406,7 +406,7 @@ class IndoorPositioningApp(QWidget):
                 # 사용자 위치 전송 타이머 중지
                 if self.udp_send_timer.isActive():
                     self.udp_send_timer.stop()
-                
+
                 # "로봇이 오고 있습니다..." 창 숨기기
                 self.robot_status_widget.hide()
 
