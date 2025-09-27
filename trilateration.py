@@ -116,6 +116,8 @@ class KalmanFilter:
 
 
 
+import numpy as np
+
 class EKF:
     def __init__(self, dt):
         self.dt = dt
@@ -128,7 +130,13 @@ class EKF:
         self.x[2] = 0.0  # 초기 yaw
         self.P = np.eye(self.n) * 0.1
         self.Q = np.diag([0.05, 0.05, 0.01, 0.1])
-        self.R = np.diag([0.2, 0.2])  # x, y만 사용
+
+        # --- 수정된 부분 ①: 측정 노이즈 공분산(R) 값 증가 ---
+        # 비콘의 정확도가 낮다는 것을 필터에 알려주기 위해 R 값을 높게 설정합니다.
+        # R 값이 클수록 필터는 비콘 측정값(z)보다 내부 예측 모델(predict)을 더 신뢰하게 됩니다.
+        # 예를 들어, 비콘 오차가 표준편차 2m 정도라고 가정하면, 분산은 2^2=4가 됩니다.
+        # 기존: self.R = np.diag([0.2, 0.2])
+        self.R = np.diag([4.0, 4.0])  # 표준편차 2m에 해당하는 분산 값으로 설정 (환경에 맞게 조절)
 
     def predict(self, imu_yaw, imu_speed):
         self.x[2] = np.deg2rad(imu_yaw)
@@ -144,25 +152,46 @@ class EKF:
         A = np.eye(self.n)
         A[0, 2] = -v * np.sin(theta) * dt
         A[0, 3] = np.cos(theta) * dt
-        A[1, 2] =  v * np.cos(theta) * dt
+        A[1, 2] = v * np.cos(theta) * dt
         A[1, 3] = np.sin(theta) * dt
 
         self.P = A @ self.P @ A.T + self.Q
 
     def update(self, z):
         # z: [x_ble, y_ble]
-        z_pred = self.x[:2]  # 예측 위치
-        H = np.zeros((2, self.n)) #관측 모델
+        z_pred = self.x[:2]
+        H = np.zeros((2, self.n))
         H[0, 0] = 1.0
         H[1, 1] = 1.0
 
-        y = z - z_pred #관측 오차
-        S = H @ self.P @ H.T + self.R #예측 오차 공분산
-        K = self.P @ H.T @ np.linalg.inv(S) # 칼만 이득
+        y = z - z_pred
+        S = H @ self.P @ H.T + self.R
+        K = self.P @ H.T @ np.linalg.inv(S)
 
-        self.x = self.x + K @ y # 상태 업데이트
-        self.P = (np.eye(self.n) - K @ H) @ self.P # 공분산 업데이트
+        # --- 수정된 부분 ②: 상태 업데이트 크기 제한 ---
+        # 칼만 이득(K)과 측정 오차(y)를 통해 계산된 보정량을 구합니다.
+        update_vector = K @ y
+
+        # 위치에 대한 보정량 [dx, dy]를 추출합니다.
+        position_update = update_vector[:2]
+        
+        # 보정량의 크기(이동 거리)를 계산합니다.
+        update_distance = np.linalg.norm(position_update)
+        
+        # 최대 허용 거리(20cm)를 정의합니다.
+        max_update_distance = 0.2
+
+        # 만약 계산된 보정 거리가 20cm를 초과하면
+        if update_distance > max_update_distance:
+            # 보정 벡터의 방향은 유지하되, 크기를 20cm로 줄입니다.
+            scale_factor = max_update_distance / update_distance
+            update_vector = update_vector * scale_factor
+
+        # 크기가 조절된 보정량을 최종 상태에 적용합니다.
+        self.x = self.x + update_vector
+        # ---------------------------------------------
+        
+        self.P = (np.eye(self.n) - K @ H) @ self.P
 
     def get_state(self):
         return self.x.copy()
-
