@@ -268,7 +268,8 @@ class IndoorPositioningApp(QWidget):
                     # 3. 예측된 레이블('x_y')을 좌표로 변환합니다.
                     x_str, y_str = predicted_label.split('_')
                     pts_grid = (int(y_str) // 2 , int(x_str) // 2) # Astar는 (row, col) 순서일 수 있으므로 확인 필요
-
+                    print("예상 좌표")
+                    print(pts_grid)
                     # 2. [핵심] 그리드 좌표를 '픽셀' 좌표로 변환
                     # QPointF를 numpy array로 바꿔서 EKF에 전달
                     pts_pixels_qpoint = self.grid_to_pixels(pts_grid)
