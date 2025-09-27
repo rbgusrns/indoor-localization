@@ -268,13 +268,13 @@ class IndoorPositioningApp(QWidget):
                     # 3. 예측된 레이블('x_y')을 좌표로 변환합니다.
                     x_str, y_str = predicted_label.split('_')
                     pts_grid = (int(x_str) // 2 , int(y_str) // 2) # Astar는 (row, col) 순서일 수 있으므로 확인 필요
-                    print("예상 좌표")
-                    print(pts_grid)
+                    #print("예상 좌표")
+                    #print(pts_grid)
                     # 2. [핵심] 그리드 좌표를 '픽셀' 좌표로 변환
                     # QPointF를 numpy array로 바꿔서 EKF에 전달
                     pts_pixels_qpoint = self.grid_to_pixels(pts_grid)
                     pts_pixels = np.array([pts_pixels_qpoint.x(), pts_pixels_qpoint.y()])
-
+                    print(pts_pixels_qpoint)
                     px_per_m_x = self.config.get('px_per_m_x', 1.0)
                     px_per_m_y = self.config.get('px_per_m_y', 1.0)
                     pts_meters = np.array([
@@ -284,7 +284,7 @@ class IndoorPositioningApp(QWidget):
                     self.ekf.update(pts_meters) # ✅ 올바른 코드
 
                     self.fused_pos = self.ekf.get_state()[:2]
-                    print(self.fused_pos)
+                    
                     self.map_viewer.mark_estimated_position(*self.fused_pos, self.current_yaw)
                     self._update_navigation_path()
 
