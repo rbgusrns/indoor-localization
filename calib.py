@@ -1,4 +1,4 @@
-# 핑거프린팅 캘리브래이션 파일 (4방향 및 버튼 지원 버전)
+# 핑거프린팅 캘리브래이션 파일 (4방향 자동 측정 버전)
 
 import sys
 import os
@@ -126,14 +126,12 @@ class CalibrationWindow(QWidget):
         layout = QVBoxLayout(self)
         layout.addWidget(self.viewer)
 
-        # --- 추가된 부분: 스캔 시작 버튼 생성 및 레이아웃 추가 ---
         self.scan_button = QPushButton("Start Scan (G)")
         self.scan_button.clicked.connect(self.start_scan)
         layout.addWidget(self.scan_button)
-        # ---------------------------------------------------
 
         self.setLayout(layout)
-        self.setWindowTitle("Fingerprint Calibration (4-Direction)")
+        self.setWindowTitle("Fingerprint Calibration (4-Direction Auto)")
 
     def setup_shortcuts(self):
         QShortcut(QKeySequence("G"), self).activated.connect(self.start_scan)
@@ -159,12 +157,12 @@ class CalibrationWindow(QWidget):
         if not self.thread.isRunning() and self.current_direction not in self.completed_directions:
             print(f"pos: ({self.current_x},{self.current_y}), dir: {self.current_direction} - SCAN START!!")
             self.thread.start()
-            self.scan_button.setEnabled(False) # --- 수정된 부분: 버튼 비활성화 ---
+            self.scan_button.setEnabled(False)
 
     def stop_scan(self):
         if self.thread.isRunning():
             self.thread.stop()
-            self.scan_button.setEnabled(True) # --- 수정된 부분: 버튼 활성화 ---
+            self.scan_button.setEnabled(True)
             print("Scan stopped by user.")
 
     def move_to_next_point(self):
@@ -179,6 +177,7 @@ class CalibrationWindow(QWidget):
             self.completed_directions.clear()
             self.current_direction = self.directions[0]
             self.tmp_vec.clear()
+            self.scan_button.setEnabled(True)  # --- 추가된 부분: 다음 지점으로 이동 후 버튼 활성화 ---
             self.update_marker()
             print(f"--- Moved to next point: ({self.current_x}, {self.current_y}) ---")
 
@@ -193,19 +192,21 @@ class CalibrationWindow(QWidget):
             if collected:
                 print(f"저장 완료 @ {pos_key} (샘플 누적됨)")
                 self.thread.stop()
-                self.scan_button.setEnabled(True) # --- 수정된 부분: 버튼 활성화 ---
                 
                 self.completed_directions.add(self.current_direction)
                 
                 remaining_dirs = [d for d in self.directions if d not in self.completed_directions]
                 
+                # --- 여기가 핵심 로직 변경 부분 ---
                 if remaining_dirs:
+                    # 다음 방향으로 변경하고 스캔을 다시 시작
                     self.change_direction(remaining_dirs[0])
+                    self.start_scan() 
                 else:
+                    # 4방향 모두 완료되면 다음 지점으로 이동하고 대기
                     print(f"All directions completed for ({self.current_x}, {self.current_y}). Moving to the next point.")
                     self.move_to_next_point()
-                
-                self.update_marker()
+                # ------------------------------
 
     def finish(self):
         if not self.thread.isRunning():
