@@ -73,6 +73,7 @@ class IndoorPositioningApp(QWidget):
         self.binary_grid = create_binary_map(self.config['map_file'], block_size=self.BLOCK_SIZE)
         if self.binary_grid is not None: 
             self.distance_map, self.max_dist = create_distance_map(self.binary_grid)
+            self.distance_map = np.array(dist_map_as_list)
         else: 
             self.close()
         self.ekf = EKF(self.config.get('ekf_dt', 1.0))
