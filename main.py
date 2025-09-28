@@ -239,6 +239,8 @@ class IndoorPositioningApp(QWidget):
             # 터미널에 보정된 값을 출력합니다.
             print(f"랜덤 업데이트 적용: ({change_vector[0]:.2f}, {change_vector[1]:.2f})m 보정됨. 이동거리: {change_distance:.2f}m")
 
+            self._update_navigation_path()
+
 
         except Exception as e:
             print(f"랜덤 측정값 업데이트 중 오류 발생: {e}")
@@ -548,6 +550,8 @@ class IndoorPositioningApp(QWidget):
         # 보정된 위치를 지도에 즉시 반영
         self.map_viewer.mark_estimated_position(*self.fused_pos, self.current_yaw)
         print(f"벽 회피 적용: ({correction_m_x:.2f}, {correction_m_y:.2f})m 보정됨")
+
+        self._update_navigation_path()
 
     def closeEvent(self, event):
         self.robot_tracker.stop()
