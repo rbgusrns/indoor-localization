@@ -526,13 +526,17 @@ class IndoorPositioningApp(QWidget):
 
         # fused_pos와 EKF 상태 동시에 보정
         self.fused_pos += correction_vector_m
+        # main.py의 _apply_wall_avoidance 함수 안에 있는 코드 (수정 전)
+
         try:
-            self.ekf.x[0, 0] = self.fused_pos[0]
+            # 1차원 배열인 self.ekf.x에 2차원 인덱싱을 사용해서 오류 발생!
+            self.ekf.x[0, 0] = self.fused_pos[0] 
             self.ekf.x[1, 0] = self.fused_pos[1]
-            # 공분산을 살짝 늘려서(불확실성 인정) EKF가 다시 수렴할 여지를 줌
+            
             if hasattr(self.ekf, "P"):
                 self.ekf.P[:2, :2] *= 1.2
         except Exception as e:
+            # 이 오류 메시지가 출력되고 있었습니다.
             print(f"EKF 상태 보정 중 오류 발생: {e}")
 
         # 보정된 위치를 지도에 즉시 반영
