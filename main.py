@@ -53,8 +53,8 @@ class IndoorPositioningApp(QWidget):
         self.target_room, self.last_start_grid, self.BLOCK_SIZE = None, None, 5
 
         # 벽 회피 기능 파라미터
-        self.AVOIDANCE_THRESHOLD_GRID = 1.5
-        self.REPULSION_STRENGTH = 0.4
+        self.AVOIDANCE_THRESHOLD_GRID = 50
+        self.REPULSION_STRENGTH = 10
 
         self.robot_arrival_processed = False
 
@@ -500,7 +500,7 @@ class IndoorPositioningApp(QWidget):
         self.map_viewer.mark_estimated_position(*self.fused_pos, self.current_yaw)
 
         print(f"벽 회피 적용: ({correction_m_x:.2f}, {correction_m_y:.2f})m 보정됨")
-        
+
     def closeEvent(self, event):
         self.robot_tracker.stop()
         self.udp_receiver.stop()
