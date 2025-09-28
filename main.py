@@ -218,7 +218,7 @@ class IndoorPositioningApp(QWidget):
         dx, dy = r * np.cos(theta), r * np.sin(theta)
 
         # 측정값 = 현재 추정 + 랜덤 오프셋
-        z = (self.fused_pos + np.array([dx, dy], dtype=float)).reshape(-1, 1)
+        z = (self.fused_pos + np.array([dx, dy], dtype=float)).flatten()
 
         try:
             # EKF 업데이트
