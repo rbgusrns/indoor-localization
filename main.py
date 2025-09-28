@@ -217,21 +217,19 @@ class IndoorPositioningApp(QWidget):
         theta = 2.0 * np.pi * np.random.rand()
         dx, dy = r * np.cos(theta), r * np.sin(theta)
 
-        # 측정값 = 현재 추정 + 랜덤 오프셋
-        z = (self.fused_pos + np.array([dx, dy], dtype=float)).reshape(2, 1)
+        # 측정값 z 생성 (1차원 배열이어야 하므로 .reshape() 제거)
+        z = self.fused_pos + np.array([dx, dy], dtype=float)
 
+        # --- 여기가 핵심 수정 부분입니다! ---
         try:
-            # self.ekf.x를 1차원 배열로 접근하도록 인덱싱을 수정합니다.
-            self.ekf.x[0] = self.fused_pos[0]
-            self.ekf.x[1] = self.fused_pos[1]
-
-            # 공분산을 살짝 늘려서(불확실성 인정) EKF가 다시 수렴할 여지를 줌
-            # self.ekf.P는 2차원 배열이므로 이 부분은 그대로 둡니다.
-            if hasattr(self.ekf, "P"):
-                self.ekf.P[:2, :2] *= 1.2
+            # 생성한 랜덤 측정값 z로 EKF를 업데이트합니다.
+            self.ekf.update(z)
+            
+            # EKF 업데이트 후, 새로운 상태 값을 fused_pos에 반영합니다.
+            self.fused_pos = self.ekf.get_state()[:2] # flatten()은 필요 시 추가
 
         except Exception as e:
-            print(f"EKF 상태 보정 중 오류 발생: {e}")
+            print(f"랜덤 측정값 업데이트 중 오류 발생: {e}")
 
     def _send_position_udp(self):
         px, py = self.fused_pos[0] * self.config['px_per_m_x'], self.fused_pos[1] * self.config['px_per_m_y']
