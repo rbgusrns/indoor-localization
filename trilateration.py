@@ -157,36 +157,36 @@ class EKF:
 
         self.P = A @ self.P @ A.T + self.Q
 
-def update(self, z):
-    # z: [x_ble, y_ble]
+    def update(self, z):
+        # z: [x_ble, y_ble]
 
-    # 항상 (2,1) column vector로 변환
-    z = np.asarray(z).reshape(2, 1)
-    z_pred = self.x[:2].reshape(2, 1)
+        # 항상 (2,1) column vector로 변환
+        z = np.asarray(z).reshape(2, 1)
+        z_pred = self.x[:2].reshape(2, 1)
 
-    H = np.zeros((2, self.n))
-    H[0, 0] = 1.0
-    H[1, 1] = 1.0
+        H = np.zeros((2, self.n))
+        H[0, 0] = 1.0
+        H[1, 1] = 1.0
 
-    y = z - z_pred                 # (2,1)
-    S = H @ self.P @ H.T + self.R
-    K = self.P @ H.T @ np.linalg.inv(S)
+        y = z - z_pred                 # (2,1)
+        S = H @ self.P @ H.T + self.R
+        K = self.P @ H.T @ np.linalg.inv(S)
 
-    update_vector = K @ y          # (n,1) 벡터
+        update_vector = K @ y          # (n,1) 벡터
 
-    # 위치 보정량
-    position_update = update_vector[:2]
-    update_distance = np.linalg.norm(position_update)
+        # 위치 보정량
+        position_update = update_vector[:2]
+        update_distance = np.linalg.norm(position_update)
 
-    max_update_distance = 0.01
-    if update_distance > max_update_distance:
-        scale_factor = max_update_distance / update_distance
-        update_vector = update_vector * scale_factor
+        max_update_distance = 0.01
+        if update_distance > max_update_distance:
+            scale_factor = max_update_distance / update_distance
+            update_vector = update_vector * scale_factor
 
-    # self.x도 (n,1) column vector라면 맞춰줘야 함
-    self.x = self.x + update_vector
+        # self.x도 (n,1) column vector라면 맞춰줘야 함
+        self.x = self.x + update_vector
 
-    self.P = (np.eye(self.n) - K @ H) @ self.P
+        self.P = (np.eye(self.n) - K @ H) @ self.P
 
     def get_state(self):
         return self.x.copy()
