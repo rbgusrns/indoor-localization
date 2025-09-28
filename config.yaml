@@ -1,22 +1,23 @@
 # 설정 변수들 저장 파일.
 
-px_per_m_x: 190
-px_per_m_y: 190
+px_per_m_x: 23
+px_per_m_y: 23
 scan_interval: 0.2
 filter_window: 5
 k_neighbors: 3
-map_file: "map.png"
+map_file: "2GONG.png"
 
 rooms:
   - name: 101호
-    x: 2.53  # 481 / 20
-    y: 2.51  # 477 / 20
+    x: 7.10
+    y: 5.40
   - name: 102호
-    x: 2.53  # 473 / 20
-    y: 0.57    # 110 / 20
+    x: 7.10
+    y: 14.20
   - name: 103호
-    x: 1.52   # 290 / 20
-    y: 0.57    # 110 / 20
+    x: 18.75
+    y: 14.20
+
 
 beacon_macs:
   - "C3:00:00:44:DC:1A"

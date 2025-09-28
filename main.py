@@ -231,7 +231,7 @@ class IndoorPositioningApp(QWidget):
 
         distance = np.sqrt((user_px - target_px)**2 + (user_py - target_py)**2)
 
-        if distance < 50:
+        if distance < 25:
             self._stop_navigation("<b>목적지에 도착했습니다.</b> 안내를 종료합니다.")
             return 
             
