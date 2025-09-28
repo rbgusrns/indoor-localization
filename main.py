@@ -67,6 +67,9 @@ class IndoorPositioningApp(QWidget):
         # 벽 회피 보정을 위한 타이머
         self.wall_avoidance_timer = QTimer(self)
 
+        self.random_meas_timer = QTimer(self)
+
+
         self._init_logic_components(); self._init_ui(); self._connect_signals(); self._start_timers()
 
     def _init_logic_components(self):
@@ -185,14 +188,51 @@ class IndoorPositioningApp(QWidget):
         # 벽 회피 타이머의 timeout 신호를 _apply_wall_avoidance 메서드에 연결
         self.wall_avoidance_timer.timeout.connect(self._apply_wall_avoidance)
 
+        self.random_meas_timer.timeout.connect(self._random_measurement_update)
+
     def _start_timers(self):
         self.rssi_clear_timer = QTimer(self); self.rssi_clear_timer.timeout.connect(self._clear_rssi_cache); self.rssi_clear_timer.start(2000)
         self.udp_receiver.start()
         self.robot_tracker.start()
 
+        self.random_meas_timer.start(1000)
+
     def _on_robot_position_update(self, px, py):
         self.map_viewer.update_robot_position(px, py)
 
+    def _random_measurement_update(self, radius_m: float = 0.5):
+        """
+        현재 fused_pos 주변 반경 radius_m 내 임의 지점을 측정값으로 가정하여 EKF에 업데이트.
+        균일 원판 분포 사용: r = sqrt(u) * R, theta ~ U[0, 2π).
+        """
+        # 선행 조건 체크
+        if self.fused_pos is None or not isinstance(self.fused_pos, np.ndarray):
+            return
+        if not hasattr(self, "ekf") or self.ekf is None:
+            return
+
+        # 원판 내 무작위 오프셋 생성
+        u = np.random.rand()
+        r = np.sqrt(u) * radius_m
+        theta = 2.0 * np.pi * np.random.rand()
+        dx, dy = r * np.cos(theta), r * np.sin(theta)
+
+        # 측정값 = 현재 추정 + 랜덤 오프셋
+        z = self.fused_pos + np.array([dx, dy], dtype=float)
+
+        try:
+            # EKF 업데이트
+            self.ekf.update(z)
+            # 내부 상태 반영
+            self.fused_pos = self.ekf.get_state()[:2].flatten()
+
+            # 지도 표시 갱신 및 경로 업데이트
+            self.map_viewer.mark_estimated_position(*self.fused_pos, self.current_yaw)
+            self._update_navigation_path()
+            # 디버그 로그
+            print(f"[RandomMeas] z=({z[0]:.2f},{z[1]:.2f}) -> fused=({self.fused_pos[0]:.2f},{self.fused_pos[1]:.2f})")
+        except Exception as e:
+            print(f"[RandomMeas] EKF 업데이트 중 오류: {e}")
 
     def _send_position_udp(self):
         px, py = self.fused_pos[0] * self.config['px_per_m_x'], self.fused_pos[1] * self.config['px_per_m_y']
@@ -510,7 +550,9 @@ class IndoorPositioningApp(QWidget):
         # 프로그램 종료 시 벽 회피 타이머 정지
         if self.wall_avoidance_timer.isActive():
             self.wall_avoidance_timer.stop()
-
+            
+        if self.random_meas_timer.isActive():
+            self.random_meas_timer.stop()
         super().closeEvent(event)
 
 
