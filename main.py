@@ -221,17 +221,14 @@ class IndoorPositioningApp(QWidget):
         z = (self.fused_pos + np.array([dx, dy], dtype=float)).reshape(2, 1)
 
         try:
+            # self.ekf.x를 1차원 배열로 접근하도록 인덱싱을 수정합니다.
             self.ekf.x[0] = self.fused_pos[0]
             self.ekf.x[1] = self.fused_pos[1]
-            
+
+            # 공분산을 살짝 늘려서(불확실성 인정) EKF가 다시 수렴할 여지를 줌
+            # self.ekf.P는 2차원 배열이므로 이 부분은 그대로 둡니다.
             if hasattr(self.ekf, "P"):
-                # 2차원 배열인지 확인 후, 대각 성분만 수정하여 안전성 확보
-                if self.ekf.P.ndim == 2 and self.ekf.P.shape[0] > 1 and self.ekf.P.shape[1] > 1:
-                    self.ekf.P[0, 0] *= 1.2
-                    self.ekf.P[1, 1] *= 1.2
-                # 1차원 배열이라면 첫 번째 요소(x의 분산)만 수정
-                elif self.ekf.P.ndim == 1 and len(self.ekf.P) > 0:
-                    self.ekf.P[0] *= 1.2
+                self.ekf.P[:2, :2] *= 1.2
 
         except Exception as e:
             print(f"EKF 상태 보정 중 오류 발생: {e}")
