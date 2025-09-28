@@ -71,7 +71,7 @@ class IndoorPositioningApp(QWidget):
 
     def _init_logic_components(self):
         binary_grid_as_list = create_binary_map(self.config['map_file'], block_size=self.BLOCK_SIZE)
-        if self.binary_grid is not None:
+        if binary_grid_as_list is not None:
             self.binary_grid = np.array(binary_grid_as_list)
             dist_map_as_list, self.max_dist = create_distance_map(self.binary_grid)
             self.distance_map = np.array(dist_map_as_list)
