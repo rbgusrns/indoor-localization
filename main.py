@@ -200,6 +200,8 @@ class IndoorPositioningApp(QWidget):
     def _on_robot_position_update(self, px, py):
         self.map_viewer.update_robot_position(px, py)
 
+# main.py 파일의 _random_measurement_update 함수를 찾아 아래 코드로 '전체'를 교체해주세요.
+
     def _random_measurement_update(self, radius_m: float = 0.5):
         """
         현재 fused_pos 주변 반경 radius_m 내 임의 지점을 측정값으로 가정하여 EKF에 업데이트.
@@ -217,16 +219,16 @@ class IndoorPositioningApp(QWidget):
         theta = 2.0 * np.pi * np.random.rand()
         dx, dy = r * np.cos(theta), r * np.sin(theta)
 
-        # 측정값 z 생성 (1차원 배열이어야 하므로 .reshape() 제거)
+        # 측정값 z 생성 (1차원 배열)
         z = self.fused_pos + np.array([dx, dy], dtype=float)
 
-        # --- 여기가 핵심 수정 부분입니다! ---
         try:
             # 생성한 랜덤 측정값 z로 EKF를 업데이트합니다.
             self.ekf.update(z)
             
             # EKF 업데이트 후, 새로운 상태 값을 fused_pos에 반영합니다.
-            self.fused_pos = self.ekf.get_state()[:2] # flatten()은 필요 시 추가
+            # self.ekf.get_state()는 1차원 배열을 반환하므로 [:2] 슬라이싱은 안전합니다.
+            self.fused_pos = self.ekf.get_state()[:2]
 
         except Exception as e:
             print(f"랜덤 측정값 업데이트 중 오류 발생: {e}")
