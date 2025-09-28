@@ -70,9 +70,9 @@ class IndoorPositioningApp(QWidget):
         self._init_logic_components(); self._init_ui(); self._connect_signals(); self._start_timers()
 
     def _init_logic_components(self):
-        self.binary_grid = create_binary_map(self.config['map_file'], block_size=self.BLOCK_SIZE)
+        binary_grid_as_list = create_binary_map(self.config['map_file'], block_size=self.BLOCK_SIZE)
         if self.binary_grid is not None:
-            # 반환된 맵을 np.array()로 감싸 NumPy 배열로 변환
+            self.binary_grid = np.array(binary_grid_as_list)
             dist_map_as_list, self.max_dist = create_distance_map(self.binary_grid)
             self.distance_map = np.array(dist_map_as_list)
         else:
