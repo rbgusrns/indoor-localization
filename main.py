@@ -218,7 +218,7 @@ class IndoorPositioningApp(QWidget):
         dx, dy = r * np.cos(theta), r * np.sin(theta)
 
         # 측정값 = 현재 추정 + 랜덤 오프셋
-        z = self.fused_pos + np.array([dx, dy], dtype=float)
+        z = (self.fused_pos + np.array([dx, dy], dtype=float)).reshape(-1, 1)
 
         try:
             # EKF 업데이트
@@ -550,7 +550,7 @@ class IndoorPositioningApp(QWidget):
         # 프로그램 종료 시 벽 회피 타이머 정지
         if self.wall_avoidance_timer.isActive():
             self.wall_avoidance_timer.stop()
-            
+
         if self.random_meas_timer.isActive():
             self.random_meas_timer.stop()
         super().closeEvent(event)
