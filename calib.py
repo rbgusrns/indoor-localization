@@ -101,7 +101,7 @@ class CalibrationWindow(QWidget):
         super().__init__()
         self.cfg = load_config()
         self.kf = {mac: KalmanFilter() for mac in self.cfg['beacon_macs']}
-        self.fpdb = FingerprintDB(required_samples=100)
+        self.fpdb = FingerprintDB(required_samples=50)
         self.thread = BLEScanThread(self.cfg, self.kf)
         self.thread.detected.connect(self.on_scan)
 
