@@ -6,7 +6,7 @@ from sklearn.neighbors import BallTree
 from collections import defaultdict
 
 class FingerprintDB:
-    def __init__(self, grid_size=(1.0, 1.0), required_samples=50):
+    def __init__(self, grid_size=(1.0, 1.0), required_samples=100):
         self.records = []
         self.tree = None
         self.rssi_matrix = None

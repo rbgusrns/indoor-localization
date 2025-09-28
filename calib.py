@@ -2,7 +2,7 @@
 
 import sys
 import os
-from PyQt5.QtCore import QCoreApplication, Qt, QRectF
+from PyQt5.QtCore import QCoreApplication, Qt, QRectF, QTimer # QTimer 임포트 추가
 from PyQt5.QtGui import QPixmap, QKeySequence, QColor
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QGraphicsEllipseItem, QGraphicsPixmapItem, QShortcut
 
@@ -101,7 +101,8 @@ class CalibrationWindow(QWidget):
         super().__init__()
         self.cfg = load_config()
         self.kf = {mac: KalmanFilter() for mac in self.cfg['beacon_macs']}
-        self.fpdb = FingerprintDB(required_samples=50)
+        # fingerprinting.py 에서 required_samples=100 으로 설정했으므로 여기서도 맞춰줍니다.
+        self.fpdb = FingerprintDB(required_samples=100) 
         self.thread = BLEScanThread(self.cfg, self.kf)
         self.thread.detected.connect(self.on_scan)
 
@@ -166,6 +167,8 @@ class CalibrationWindow(QWidget):
             print("Scan stopped by user.")
 
     def move_to_next_point(self):
+        # 이 메소드 내부의 'if not self.thread.isRunning():' 조건은
+        # 사용자가 'N'키를 눌렀을 때만 스캔 중 이동을 방지하기 위해 필요하므로 그대로 둡니다.
         if not self.thread.isRunning():
             self.current_x += 1
             if self.current_x >= self.grid_width:
@@ -177,7 +180,7 @@ class CalibrationWindow(QWidget):
             self.completed_directions.clear()
             self.current_direction = self.directions[0]
             self.tmp_vec.clear()
-            self.scan_button.setEnabled(True)  # --- 추가된 부분: 다음 지점으로 이동 후 버튼 활성화 ---
+            self.scan_button.setEnabled(True)
             self.update_marker()
             print(f"--- Moved to next point: ({self.current_x}, {self.current_y}) ---")
 
@@ -190,23 +193,26 @@ class CalibrationWindow(QWidget):
             self.tmp_vec.clear()
 
             if collected:
-                print(f"저장 완료 @ {pos_key} (샘플 누적됨)")
+                print(f"수집 완료 @ {pos_key}")
                 self.thread.stop()
-                
-                self.completed_directions.add(self.current_direction)
-                
-                remaining_dirs = [d for d in self.directions if d not in self.completed_directions]
-                
-                # --- 여기가 핵심 로직 변경 부분 ---
-                if remaining_dirs:
-                    # 다음 방향으로 변경하고 스캔을 다시 시작
-                    self.change_direction(remaining_dirs[0])
-                    self.start_scan() 
-                else:
-                    # 4방향 모두 완료되면 다음 지점으로 이동하고 대기
-                    print(f"All directions completed for ({self.current_x}, {self.current_y}). Moving to the next point.")
-                    self.move_to_next_point()
-                # ------------------------------
+                # 타이머를 이용해 스레드가 멈출 시간을 번 뒤 다음 동작을 실행합니다.
+                QTimer.singleShot(100, self._on_collection_finished)
+
+    def _on_collection_finished(self):
+        """한 방향의 샘플 수집이 완료된 후 타이머에 의해 호출되는 메소드"""
+        self.completed_directions.add(self.current_direction)
+        remaining_dirs = [d for d in self.directions if d not in self.completed_directions]
+        
+        if remaining_dirs:
+            # 다음 방향으로 변경하고 스캔을 다시 시작
+            print(f"'{self.current_direction}' 방향 완료. 다음 방향 '{remaining_dirs[0]}' 스캔을 시작합니다.")
+            self.change_direction(remaining_dirs[0])
+            self.start_scan() 
+        else:
+            # 4방향 모두 완료되면 버튼을 활성화하고 다음 지점으로 이동
+            print(f"({self.current_x}, {self.current_y})의 4방향 스캔 완료. 다음 지점으로 이동합니다.")
+            # move_to_next_point()가 내부적으로 버튼을 활성화시킵니다.
+            self.move_to_next_point()
 
     def finish(self):
         if not self.thread.isRunning():
