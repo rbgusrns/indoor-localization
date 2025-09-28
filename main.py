@@ -49,7 +49,7 @@ class IndoorPositioningApp(QWidget):
         self.config, self.room_coords = config, {room['name']: (room['x'], room['y']) for room in config['rooms']}
         self.rssi_mutex, self.rssi_data = QMutex(), {}
         self.current_speed, self.current_yaw, self.fused_pos = 0.0, 180.0, (0,0)
-        self.target_room, self.last_start_grid, self.BLOCK_SIZE = None, None, 10
+        self.target_room, self.last_start_grid, self.BLOCK_SIZE = None, None, 5
 
         # 벽 회피 기능 파라미터
         self.AVOIDANCE_THRESHOLD_GRID = 1.5
