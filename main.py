@@ -51,10 +51,9 @@ class IndoorPositioningApp(QWidget):
         self.current_speed, self.current_yaw, self.fused_pos = 0.0, 180.0, np.array([0.0, 0.0])
         self.target_room, self.last_start_grid, self.BLOCK_SIZE = None, None, 5
 
-        # --- ▼ [수정됨] 벽 회피 기능 파라미터 강도 증가 ---
+        # 벽 회피 기능 파라미터 (보정 강도 상향)
         self.AVOIDANCE_THRESHOLD_GRID = 1.5
-        self.REPULSION_STRENGTH = 1.0 # 0.4에서 1.0으로 상향 조정
-        # --- ▲ [수정됨] ---
+        self.REPULSION_STRENGTH = 1.0
 
         self.robot_arrival_processed = False
 
@@ -64,9 +63,9 @@ class IndoorPositioningApp(QWidget):
         self.udp_destination_timer = QTimer(self)
         self.udp_receiver = UDPReceiverThread(port=self.config.get('udp_listen_port', 5006))
 
-        # --- ▼ [제거됨] 타이머 방식 제거 ---
-        # self.wall_avoidance_timer = QTimer(self)
-        # --- ▲ [제거됨] ---
+        # --- ▼ [활성화] 벽 회피 보정을 위한 타이머 ---
+        self.wall_avoidance_timer = QTimer(self)
+        # --- ▲ [활성화] ---
 
         self._init_logic_components(); self._init_ui(); self._connect_signals(); self._start_timers()
 
@@ -174,9 +173,10 @@ class IndoorPositioningApp(QWidget):
         self.udp_destination_timer.timeout.connect(self._send_destination_udp)
         self.udp_receiver.message_received.connect(self._on_robot_message_received)
         self.robot_tracker.robot_position_updated.connect(self._on_robot_position_update)
-        # --- ▼ [제거됨] 타이머 연결 제거 ---
-        # self.wall_avoidance_timer.timeout.connect(self._apply_wall_avoidance)
-        # --- ▲ [제거됨] ---
+        
+        # --- ▼ [활성화] 타이머 연결 ---
+        self.wall_avoidance_timer.timeout.connect(self._apply_wall_avoidance)
+        # --- ▲ [활성화] ---
 
     def _start_timers(self):
         self.rssi_clear_timer = QTimer(self); self.rssi_clear_timer.timeout.connect(self._clear_rssi_cache); self.rssi_clear_timer.start(2000)
@@ -272,10 +272,6 @@ class IndoorPositioningApp(QWidget):
                 self.ekf.update(pts_meters)
                 self.fused_pos = self.ekf.get_state()[:2].flatten()
                 
-                # --- ▼ [추가됨] EKF 업데이트 직후 벽 회피 로직을 즉시 호출 ---
-                self._apply_wall_avoidance()
-                # --- ▲ [추가됨] ---
-
                 self.map_viewer.mark_estimated_position(*self.fused_pos, self.current_yaw)
                 self._update_navigation_path()
             except Exception as e:
@@ -286,16 +282,11 @@ class IndoorPositioningApp(QWidget):
         self.ekf.predict(self.current_yaw, self.current_speed)
         self.fused_pos = self.ekf.get_state()[:2].flatten()
         
-        # --- ▼ [추가됨] EKF 업데이트 직후 벽 회피 로직을 즉시 호출 ---
-        self._apply_wall_avoidance()
-        # --- ▲ [추가됨] ---
-
         self.map_viewer.mark_estimated_position(*self.fused_pos, self.current_yaw)
         self._update_navigation_path()
 
     def _on_yaw_update(self, yaw):
         self.current_yaw = yaw
-        # Yaw 업데이트 시에는 위치 보정을 하지 않고 시각적 표시만 변경
         self.map_viewer.mark_estimated_position(*self.fused_pos, self.current_yaw)
 
     def _clear_rssi_cache(self):
@@ -323,11 +314,11 @@ class IndoorPositioningApp(QWidget):
         if not self.ble_scanner_thread.isRunning():
             self.ble_scanner_thread.start()
             print("BLE Scan Started.")
-            # --- ▼ [제거됨] 타이머 시작 로직 제거 ---
-            # if not self.wall_avoidance_timer.isActive():
-            #     self.wall_avoidance_timer.start(1000)
-            #     print("벽 회피 보정 타이머를 시작합니다 (1초 간격).")
-            # --- ▲ [제거됨] ---
+            # --- ▼ [활성화] 타이머 시작 ---
+            if not self.wall_avoidance_timer.isActive():
+                self.wall_avoidance_timer.start(1000) # 1000ms = 1초
+                print("벽 회피 보정 타이머를 시작합니다 (1초 간격).")
+            # --- ▲ [활성화] ---
 
     def _on_robot_call_clicked(self):
         if not self.target_room:
@@ -418,12 +409,13 @@ class IndoorPositioningApp(QWidget):
         return QPointF(px, py)
 
     def _apply_wall_avoidance(self):
-        """EKF로 추정된 현재 위치가 벽에 너무 가까우면 보정합니다."""
+        """(타이머 호출) 현재 위치가 벽에 너무 가까우면 보정하고 EKF 상태에 직접 반영합니다."""
         if self.fused_pos is None or self.distance_map is None: return
         current_grid = self.meters_to_grid(self.fused_pos)
         row, col = current_grid
         height, width = self.distance_map.shape
         if not (0 <= row < height and 0 <= col < width): return
+        
         distance_to_wall = self.distance_map[row][col]
         if distance_to_wall >= self.AVOIDANCE_THRESHOLD_GRID: return
         
@@ -442,7 +434,13 @@ class IndoorPositioningApp(QWidget):
         correction_m_y = correction_vector_grid[1] * self.BLOCK_SIZE / self.config['px_per_m_y']
         correction_vector_m = np.array([correction_m_x, correction_m_y])
         
+        # --- ▼ [수정됨] 보정 값을 최종 위치와 EKF 상태 모두에 적용 ---
         self.fused_pos += correction_vector_m
+        self.ekf.x[:2] += correction_vector_m.reshape(2, 1) # EKF 상태 벡터 직접 수정
+        # --- ▲ [수정됨] ---
+        
+        # 보정된 위치를 지도에 즉시 반영
+        self.map_viewer.mark_estimated_position(*self.fused_pos, self.current_yaw)
         print(f"벽 회피 적용: ({correction_m_x:.2f}, {correction_m_y:.2f})m 보정됨")
 
     def closeEvent(self, event):
@@ -450,10 +448,12 @@ class IndoorPositioningApp(QWidget):
         self.udp_receiver.stop()
         self.ble_scanner_thread.stop()
         if self.serial_reader: self.serial_reader.stop()
-        # --- ▼ [제거됨] 타이머 정지 로직 제거 ---
-        # if self.wall_avoidance_timer.isActive():
-        #     self.wall_avoidance_timer.stop()
-        # --- ▲ [제거됨] ---
+        
+        # --- ▼ [활성화] 타이머 정지 ---
+        if self.wall_avoidance_timer.isActive():
+            self.wall_avoidance_timer.stop()
+        # --- ▲ [활성화] ---
+            
         super().closeEvent(event)
 
 if __name__ == "__main__":
