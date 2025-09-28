@@ -62,7 +62,7 @@ def find_path(grid, start, end, distance_map, max_dist, penalty_strength):
     """
     A* 알고리즘 (대각선 이동 및 중앙 경로 선호 로직 적용)
     """
-    if not grid or grid[start[0]][start[1]] != 0 or grid[end[0]][end[1]] != 0:
+    if grid is None or grid[start[0]][start[1]] != 0 or grid[end[0]][end[1]] != 0:
         return None
 
     start_node = Node(None, start)
