@@ -179,7 +179,7 @@ class EKF:
         update_distance = np.linalg.norm(position_update)
         
         # 최대 허용 거리(20cm)를 정의합니다.
-        max_update_distance = 0.01
+        max_update_distance = 0.5
 
         # 만약 계산된 보정 거리가 20cm를 초과하면
         if update_distance > max_update_distance:
