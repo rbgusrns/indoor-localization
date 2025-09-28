@@ -27,8 +27,8 @@ map_px_width = 762
 map_px_height = 574
 room_width_m = 4
 room_height_m = 3
-grid_width = 8
-grid_height = 6
+grid_width = 4
+grid_height = 3
 BEACON_COUNT = 6
 
 px_per_m_x = map_px_width / room_width_m
