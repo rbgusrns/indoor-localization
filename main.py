@@ -212,6 +212,8 @@ class IndoorPositioningApp(QWidget):
             return
         if not hasattr(self, "ekf") or self.ekf is None:
             return
+        
+        pos_before = self.fused_pos.copy()
 
         # 원판 내 무작위 오프셋 생성
         u = np.random.rand()
