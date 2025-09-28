@@ -465,6 +465,7 @@ class IndoorPositioningApp(QWidget):
         if distance_to_wall >= self.AVOIDANCE_THRESHOLD_GRID:
             return
 
+        # 거리 맵 그라디언트 근사
         grad_r = self.distance_map[min(row + 1, height - 1)][col] - self.distance_map[max(row - 1, 0)][col]
         grad_c = self.distance_map[row][min(col + 1, width - 1)] - self.distance_map[row][max(col - 1, 0)]
 
@@ -484,16 +485,22 @@ class IndoorPositioningApp(QWidget):
         correction_m_y = correction_vector_grid[1] * self.BLOCK_SIZE / self.config['px_per_m_y']
         correction_vector_m = np.array([correction_m_x, correction_m_y])
 
+        # fused_pos와 EKF 상태 동시에 보정
         self.fused_pos += correction_vector_m
-
-        # EKF의 상태를 직접 수정하는 코드를 제거하여 충돌을 방지
-        # self.ekf.x[:2] = self.fused_pos.reshape(2, 1)
+        try:
+            self.ekf.x[0, 0] = self.fused_pos[0]
+            self.ekf.x[1, 0] = self.fused_pos[1]
+            # 공분산을 살짝 늘려서(불확실성 인정) EKF가 다시 수렴할 여지를 줌
+            if hasattr(self.ekf, "P"):
+                self.ekf.P[:2, :2] *= 1.2
+        except Exception as e:
+            print(f"EKF 상태 보정 중 오류 발생: {e}")
 
         # 보정된 위치를 지도에 즉시 반영
         self.map_viewer.mark_estimated_position(*self.fused_pos, self.current_yaw)
 
         print(f"벽 회피 적용: ({correction_m_x:.2f}, {correction_m_y:.2f})m 보정됨")
-
+        
     def closeEvent(self, event):
         self.robot_tracker.stop()
         self.udp_receiver.stop()
