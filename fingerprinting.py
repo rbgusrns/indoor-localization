@@ -37,15 +37,19 @@ class FingerprintDB:
         return {mac: float(col_mean[j]) for j, mac in enumerate(macs)}
 
     def collect(self, pos, rssi_vector):
-        pos_key = tuple(pos) if isinstance(pos, (list, tuple)) else (pos,) #pos가 리스트나 튜플이면 튜플로 변환 아니라해도 하나만 넣어서 튜플화. 웬만하면 퓨틀이나 리스트임...!
-        #print(pos_key)
-        self._acc_buffer[pos_key].append(rssi_vector.copy()) #셀 좌표에 해당하는 rssi 벡터를 추가. rssi 벡터는 딕셔너리 형태이고, 4개 이상의 mac이 들어있음.
-        #print(self._acc_buffer[pos_key])                    #들어올때마다 점차 중복되며 쌓인다..
+        pos_key = tuple(pos) if isinstance(pos, (list, tuple)) else (pos,)
+        
+        # 1. 평균을 내지 않고, 들어온 데이터를 바로 records에 추가합니다.
+        self.records.append({'pos': list(pos_key), 'rssi': rssi_vector.copy()})
+        
+        # 2. 샘플 개수를 세기 위한 로직은 그대로 유지합니다. (캘리브레이션 제어를 위해 필요)
+        self._acc_buffer[pos_key].append(1) # 실제 데이터 대신 카운트용 숫자만 넣어도 됩니다.
+        
         if len(self._acc_buffer[pos_key]) >= self.required_samples:
-            avg = self._average_rssi(self._acc_buffer[pos_key]) #모은 샘플을 평균냄.
-            self.records.append({'pos': list(pos_key), 'rssi': avg})
+            # 3. 목표 개수에 도달하면 버퍼를 비우고 True를 반환합니다.
             self._acc_buffer[pos_key] = []
             return True
+            
         return False
 
     def build_index(self):
@@ -82,7 +86,7 @@ class FingerprintDB:
 
     def save(self, path="fingerprint_db.json"):
         with open(path, 'w') as f:
-            json.dump(self.records, f)
+            json.dump(self.records, f, indent=4, ensure_ascii=False)
 
     def load(self, path="fingerprint_db.json"):
         with open(path, 'r') as f:
