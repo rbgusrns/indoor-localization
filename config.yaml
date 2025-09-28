@@ -1,7 +1,7 @@
 # 설정 변수들 저장 파일.
 
-px_per_m_x: 23
-px_per_m_y: 23
+px_per_m_x: 35.2
+px_per_m_y: 35.2
 scan_interval: 0.2
 filter_window: 5
 k_neighbors: 3
