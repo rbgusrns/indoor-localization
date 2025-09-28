@@ -2,9 +2,9 @@
 
 import sys
 import os
-from PyQt5.QtCore import QCoreApplication, Qt, QRectF, QTimer # QTimer 임포트 추가
-from PyQt5.QtGui import QPixmap, QKeySequence, QColor
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QGraphicsEllipseItem, QGraphicsPixmapItem, QShortcut
+from PyQt5.QtCore import QCoreApplication, Qt, QRectF, QTimer
+from PyQt5.QtGui import QPixmap, QKeySequence, QColor, QFont
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QGraphicsEllipseItem, QGraphicsPixmapItem, QShortcut, QLabel # QLabel 임포트 추가
 
 # --- 다른 모듈 import (실제 환경에 맞게 경로 설정 필요) ---
 from app_config import load_config
@@ -101,8 +101,7 @@ class CalibrationWindow(QWidget):
         super().__init__()
         self.cfg = load_config()
         self.kf = {mac: KalmanFilter() for mac in self.cfg['beacon_macs']}
-        # fingerprinting.py 에서 required_samples=100 으로 설정했으므로 여기서도 맞춰줍니다.
-        self.fpdb = FingerprintDB(required_samples=100) 
+        self.fpdb = FingerprintDB(required_samples=100)
         self.thread = BLEScanThread(self.cfg, self.kf)
         self.thread.detected.connect(self.on_scan)
 
@@ -126,6 +125,16 @@ class CalibrationWindow(QWidget):
         
         layout = QVBoxLayout(self)
         layout.addWidget(self.viewer)
+
+        ### --- 수정/추가된 부분 --- ###
+        # 상태 표시를 위한 QLabel 위젯 추가
+        self.status_label = QLabel("준비 완료. 'G'를 눌러 스캔을 시작하세요.")
+        font = self.status_label.font()
+        font.setPointSize(12)
+        self.status_label.setFont(font)
+        self.status_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.status_label)
+        ### -------------------------- ###
 
         self.scan_button = QPushButton("Start Scan (G)")
         self.scan_button.clicked.connect(self.start_scan)
@@ -157,6 +166,13 @@ class CalibrationWindow(QWidget):
     def start_scan(self):
         if not self.thread.isRunning() and self.current_direction not in self.completed_directions:
             print(f"pos: ({self.current_x},{self.current_y}), dir: {self.current_direction} - SCAN START!!")
+            
+            ### --- 수정/추가된 부분 --- ###
+            # 스캔 시작 시 상태 메시지 업데이트
+            status_text = f"({self.current_x}, {self.current_y}, '{self.current_direction}') 수집 중: 0 / {self.fpdb.required_samples}"
+            self.status_label.setText(status_text)
+            ### -------------------------- ###
+
             self.thread.start()
             self.scan_button.setEnabled(False)
 
@@ -165,10 +181,12 @@ class CalibrationWindow(QWidget):
             self.thread.stop()
             self.scan_button.setEnabled(True)
             print("Scan stopped by user.")
+            
+            ### --- 수정/추가된 부분 --- ###
+            self.status_label.setText("사용자에 의해 스캔이 중지되었습니다.")
+            ### -------------------------- ###
 
     def move_to_next_point(self):
-        # 이 메소드 내부의 'if not self.thread.isRunning():' 조건은
-        # 사용자가 'N'키를 눌렀을 때만 스캔 중 이동을 방지하기 위해 필요하므로 그대로 둡니다.
         if not self.thread.isRunning():
             self.current_x += 1
             if self.current_x >= self.grid_width:
@@ -183,36 +201,55 @@ class CalibrationWindow(QWidget):
             self.scan_button.setEnabled(True)
             self.update_marker()
             print(f"--- Moved to next point: ({self.current_x}, {self.current_y}) ---")
+            
+            ### --- 수정/추가된 부분 --- ###
+            status_text = f"({self.current_x}, {self.current_y})로 이동. 'G'를 눌러 스캔을 시작하세요."
+            self.status_label.setText(status_text)
+            ### -------------------------- ###
 
     def on_scan(self, vec):
         self.tmp_vec.update(vec)
 
         if len(self.tmp_vec) >= BEACON_COUNT:
             pos_key = (self.current_x, self.current_y, self.current_direction)
+            
+            ### --- 수정/추가된 부분 --- ###
+            # collect를 호출하기 전에 현재 카운트를 가져와서 텍스트 업데이트
+            # 버퍼에 아직 추가되기 전이므로 +1을 해준다.
+            current_count = len(self.fpdb._acc_buffer.get(pos_key, [])) + 1
+            total_samples = self.fpdb.required_samples
+            status_text = f"({self.current_x}, {self.current_y}, '{self.current_direction}') 수집 중: {current_count} / {total_samples}"
+            self.status_label.setText(status_text)
+            ### -------------------------- ###
+            
             collected = self.fpdb.collect(pos_key, self.tmp_vec.copy())
             self.tmp_vec.clear()
 
             if collected:
                 print(f"수집 완료 @ {pos_key}")
                 self.thread.stop()
-                # 타이머를 이용해 스레드가 멈출 시간을 번 뒤 다음 동작을 실행합니다.
                 QTimer.singleShot(100, self._on_collection_finished)
 
     def _on_collection_finished(self):
-        """한 방향의 샘플 수집이 완료된 후 타이머에 의해 호출되는 메소드"""
         self.completed_directions.add(self.current_direction)
         remaining_dirs = [d for d in self.directions if d not in self.completed_directions]
         
         if remaining_dirs:
-            # 다음 방향으로 변경하고 스캔을 다시 시작
             print(f"'{self.current_direction}' 방향 완료. 다음 방향 '{remaining_dirs[0]}' 스캔을 시작합니다.")
             self.change_direction(remaining_dirs[0])
             self.start_scan() 
         else:
-            # 4방향 모두 완료되면 버튼을 활성화하고 다음 지점으로 이동
             print(f"({self.current_x}, {self.current_y})의 4방향 스캔 완료. 다음 지점으로 이동합니다.")
-            # move_to_next_point()가 내부적으로 버튼을 활성화시킵니다.
-            self.move_to_next_point()
+            
+            ### --- 수정/추가된 부분 --- ###
+            status_text = f"({self.current_x}, {self.current_y}) 모든 방향 수집 완료! 'N'으로 이동하세요."
+            self.status_label.setText(status_text)
+            self.scan_button.setEnabled(True) # 'N'을 누르기 전에 수동으로 재시작할 경우를 위해 버튼 활성화
+            ### -------------------------- ###
+            
+            # self.move_to_next_point() # 자동 이동 대신 대기하도록 변경 (사용자 편의성)
+            # 만약 모든 방향 완료 후 자동으로 다음 지점으로 이동하게 하려면 아래 주석을 푸세요.
+            # self.move_to_next_point()
 
     def finish(self):
         if not self.thread.isRunning():
