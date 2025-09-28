@@ -9,14 +9,14 @@ map_file: "2GONG.png"
 
 rooms:
   - name: 101호
-    x: 7.10
-    y: 5.40
+    x: 13.1
+    y: 9.7
   - name: 102호
-    x: 7.10
-    y: 14.20
+    x: 9.7
+    y: 9.7
   - name: 103호
-    x: 18.75
-    y: 14.20
+    x: 13.2
+    y: 9.7
 
 
 beacon_macs:

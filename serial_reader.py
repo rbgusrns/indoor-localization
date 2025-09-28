@@ -26,7 +26,7 @@ class SerialReader(QThread):
 
                 elif line.startswith("S"):
                     try:
-                        speed = int(line[1:].strip()) / 10
+                        speed = int(line[1:].strip()) / 2
                         #print("Speed:", speed)
                         self.speed_received.emit(speed)
                     except ValueError:
