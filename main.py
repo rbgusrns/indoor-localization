@@ -202,7 +202,7 @@ class IndoorPositioningApp(QWidget):
 
 # main.py 파일의 _random_measurement_update 함수를 찾아 아래 코드로 '전체'를 교체해주세요.
 
-    def _random_measurement_update(self, radius_m: float = 1):
+    def _random_measurement_update(self, radius_m: float = 10):
         """
         현재 fused_pos 주변 반경 radius_m 내 임의 지점을 측정값으로 가정하여 EKF에 업데이트.
         균일 원판 분포 사용: r = sqrt(u) * R, theta ~ U[0, 2π).
