@@ -48,13 +48,13 @@ class IndoorPositioningApp(QWidget):
         super().__init__()
         self.config, self.room_coords = config, {room['name']: (room['x'], room['y']) for room in config['rooms']}
         self.rssi_mutex, self.rssi_data = QMutex(), {}
-        # fused_pos를 튜플이 아닌 NumPy 배열로 초기화
         self.current_speed, self.current_yaw, self.fused_pos = 0.0, 180.0, np.array([0.0, 0.0])
         self.target_room, self.last_start_grid, self.BLOCK_SIZE = None, None, 5
 
-        # 벽 회피 기능 파라미터
+        # --- ▼ [수정됨] 벽 회피 기능 파라미터 강도 증가 ---
         self.AVOIDANCE_THRESHOLD_GRID = 1.5
-        self.REPULSION_STRENGTH = 0.4
+        self.REPULSION_STRENGTH = 1.0 # 0.4에서 1.0으로 상향 조정
+        # --- ▲ [수정됨] ---
 
         self.robot_arrival_processed = False
 
@@ -64,8 +64,9 @@ class IndoorPositioningApp(QWidget):
         self.udp_destination_timer = QTimer(self)
         self.udp_receiver = UDPReceiverThread(port=self.config.get('udp_listen_port', 5006))
 
-        # 벽 회피 보정을 위한 타이머
-        self.wall_avoidance_timer = QTimer(self)
+        # --- ▼ [제거됨] 타이머 방식 제거 ---
+        # self.wall_avoidance_timer = QTimer(self)
+        # --- ▲ [제거됨] ---
 
         self._init_logic_components(); self._init_ui(); self._connect_signals(); self._start_timers()
 
@@ -91,13 +92,11 @@ class IndoorPositioningApp(QWidget):
             self.serial_reader = SerialReader(port=imu_port, baudrate=baudrate); self.serial_reader.start()
         except serial.SerialException as e:
             print(f"시리얼 포트 오류: {e}."); self.serial_reader = None
-
         self.robot_tracker = RobotTrackerThread(port=self.config.get('robot_udp_port', 5005))
 
     def _init_ui(self):
         self.toast_label = QLabel(self); self.toast_label.setObjectName("Toast"); self.toast_label.setAlignment(Qt.AlignCenter); self.toast_label.hide()
 
-        # 로봇 호출 상태 위젯
         self.setObjectName("MainWindow")
         self.robot_status_widget = QWidget(self)
         self.robot_status_widget.setObjectName("RobotStatus")
@@ -110,7 +109,6 @@ class IndoorPositioningApp(QWidget):
         shadow = QGraphicsDropShadowEffect(); shadow.setBlurRadius(25); shadow.setColor(QColor(0, 0, 0, 80)); shadow.setOffset(0, 4)
         self.robot_status_widget.setGraphicsEffect(shadow)
 
-        # 로봇 도착 확인 위젯
         self.arrival_prompt_widget = QWidget(self)
         self.arrival_prompt_widget.setObjectName("ArrivalPrompt")
         self.arrival_prompt_widget.hide()
@@ -126,7 +124,6 @@ class IndoorPositioningApp(QWidget):
         arrival_shadow = QGraphicsDropShadowEffect(); arrival_shadow.setBlurRadius(25); arrival_shadow.setColor(QColor(0, 0, 0, 80)); arrival_shadow.setOffset(0, 4)
         self.arrival_prompt_widget.setGraphicsEffect(arrival_shadow)
 
-        # 길안내 상태 위젯
         self.navigation_status_widget = QWidget(self)
         self.navigation_status_widget.setObjectName("NavigationStatus")
         self.navigation_status_widget.hide()
@@ -138,7 +135,6 @@ class IndoorPositioningApp(QWidget):
         nav_shadow = QGraphicsDropShadowEffect(); nav_shadow.setBlurRadius(25); nav_shadow.setColor(QColor(0, 0, 0, 80)); nav_shadow.setOffset(0, 4)
         self.navigation_status_widget.setGraphicsEffect(nav_shadow)
 
-        # 현재 경로 안내 위젯 (좌측 상단)
         self.current_nav_widget = QWidget(self)
         self.current_nav_widget.setObjectName("CurrentNav")
         self.current_nav_widget.hide()
@@ -152,7 +148,6 @@ class IndoorPositioningApp(QWidget):
         current_nav_shadow = QGraphicsDropShadowEffect(); current_nav_shadow.setBlurRadius(20); current_nav_shadow.setColor(QColor(0, 0, 0, 70)); current_nav_shadow.setOffset(0, 3)
         self.current_nav_widget.setGraphicsEffect(current_nav_shadow)
 
-        # 메인 레이아웃
         self.map_viewer = MapViewer(self.config['map_file'], self.config['px_per_m_x'], self.config['px_per_m_y'])
         self.map_viewer._init_est_items(0, 0, 180.0)
         self.nav_btn = QPushButton("길안내"); self.nav_btn.setObjectName("NAV")
@@ -161,12 +156,10 @@ class IndoorPositioningApp(QWidget):
         main_layout = QHBoxLayout(self); main_layout.addWidget(self.map_viewer); main_layout.addLayout(right_layout)
 
         main_layout.setSpacing(13)
-
         self.setWindowTitle("ODIGA"); self.setFocusPolicy(Qt.StrongFocus); self.load_stylesheet('stylesheet.qss'); self.showFullScreen(); self.setFocus()
 
     def _connect_signals(self):
         self.ble_scanner_thread.detected.connect(self._on_ble_device_detected)
-
         if self.serial_reader:
             self.serial_reader.heading_received.connect(self._on_yaw_update)
             self.serial_reader.speed_received.connect(self._on_speed_update)
@@ -181,9 +174,9 @@ class IndoorPositioningApp(QWidget):
         self.udp_destination_timer.timeout.connect(self._send_destination_udp)
         self.udp_receiver.message_received.connect(self._on_robot_message_received)
         self.robot_tracker.robot_position_updated.connect(self._on_robot_position_update)
-
-        # 벽 회피 타이머의 timeout 신호를 _apply_wall_avoidance 메서드에 연결
-        self.wall_avoidance_timer.timeout.connect(self._apply_wall_avoidance)
+        # --- ▼ [제거됨] 타이머 연결 제거 ---
+        # self.wall_avoidance_timer.timeout.connect(self._apply_wall_avoidance)
+        # --- ▲ [제거됨] ---
 
     def _start_timers(self):
         self.rssi_clear_timer = QTimer(self); self.rssi_clear_timer.timeout.connect(self._clear_rssi_cache); self.rssi_clear_timer.start(2000)
@@ -193,7 +186,6 @@ class IndoorPositioningApp(QWidget):
     def _on_robot_position_update(self, px, py):
         self.map_viewer.update_robot_position(px, py)
 
-
     def _send_position_udp(self):
         px, py = self.fused_pos[0] * self.config['px_per_m_x'], self.fused_pos[1] * self.config['px_per_m_y']
         message = f"{int(px)},{int(py)}"
@@ -201,7 +193,6 @@ class IndoorPositioningApp(QWidget):
         print(f"UDP Sent: {message}")
 
     def _send_destination_udp(self):
-        """설정된 목적지(target_room)의 좌표를 UDP로 전송합니다."""
         if self.target_room:
             dest_m = self.target_room
             dest_px = dest_m[0] * self.config['px_per_m_x']
@@ -233,27 +224,20 @@ class IndoorPositioningApp(QWidget):
 
     def _update_navigation_path(self):
         if not self.target_room: return
-
         user_px = self.fused_pos[0] * self.config['px_per_m_x']
         user_py = self.fused_pos[1] * self.config['px_per_m_y']
         target_px = self.target_room[0] * self.config['px_per_m_x']
         target_py = self.target_room[1] * self.config['px_per_m_y']
-
         distance = np.sqrt((user_px - target_px)**2 + (user_py - target_py)**2)
-
         if distance < 25:
             self._stop_navigation("<b>목적지에 도착했습니다.</b> 안내를 종료합니다.")
             return
-
         start_m, end_m = self.fused_pos, self.target_room
         start_grid, end_grid = self.meters_to_grid(start_m), self.meters_to_grid(end_m)
-
-        # 시작점이 맵 범위 안에 있는지 확인하는 안전 코드
         grid_height, grid_width = self.binary_grid.shape
         if not (0 <= start_grid[0] < grid_height and 0 <= start_grid[1] < grid_width):
             print(f"경고: 시작점 {start_grid}이(가) 맵 범위를 벗어났습니다. 경로를 업데이트하지 않습니다.")
-            return # 함수를 즉시 종료하여 오류 방지
-
+            return
         if self.last_start_grid == start_grid: return
         self.last_start_grid = start_grid
         path_grid = find_path(self.binary_grid, start_grid, end_grid, self.distance_map, self.max_dist, self.config.get('penalty_strength', 2.5))
@@ -261,63 +245,58 @@ class IndoorPositioningApp(QWidget):
         self.map_viewer.draw_path(path_pixels)
 
     def _get_direction_from_yaw(self, yaw):
-        """Yaw 각도를 N, E, S, W 방향으로 변환합니다."""
-        if 45 <= yaw < 135:
-            return 'S'
-        elif 135 <= yaw < 225:
-            return 'W'
-        elif 225 <= yaw < 315:
-            return 'N'
-        else: # 315 <= yaw or yaw < 45
-            return 'E'
+        if 45 <= yaw < 135: return 'S'
+        elif 135 <= yaw < 225: return 'W'
+        elif 225 <= yaw < 315: return 'N'
+        else: return 'E'
 
     def _on_ble_device_detected(self, rssi_vec):
         self.rssi_mutex.lock()
         self.rssi_data.update(rssi_vec)
         local_rssi_copy = self.rssi_data.copy()
         self.rssi_mutex.unlock()
+        if len(local_rssi_copy) >= 1 and self.lgbm_predictor:
+            try:
+                direction = self._get_direction_from_yaw(self.current_yaw)
+                local_rssi_copy['direction'] = direction
+                predicted_label = self.lgbm_predictor.predict(local_rssi_copy)
+                x_str, y_str = predicted_label.split('_')
+                pts_grid = (int(x_str), int(y_str))
+                pts_pixels_qpoint = self.grid_to_pixels(pts_grid)
+                px_per_m_x = self.config.get('px_per_m_x', 1.0)
+                px_per_m_y = self.config.get('px_per_m_y', 1.0)
+                pts_meters = np.array([
+                    pts_pixels_qpoint.x() * 19 / px_per_m_x,
+                    pts_pixels_qpoint.y() * 19 / px_per_m_y
+                ])
+                self.ekf.update(pts_meters)
+                self.fused_pos = self.ekf.get_state()[:2].flatten()
+                
+                # --- ▼ [추가됨] EKF 업데이트 직후 벽 회피 로직을 즉시 호출 ---
+                self._apply_wall_avoidance()
+                # --- ▲ [추가됨] ---
 
-        if len(local_rssi_copy) >= 1:
-            if self.lgbm_predictor:
-                try:
-                    # 1. IMU 센서에서 받은 Yaw 값으로 현재 방향('N' 등)을 결정합니다.
-                    direction = self._get_direction_from_yaw(self.current_yaw)
-                    local_rssi_copy['direction'] = direction
-
-                    # 2. Predictor 객체의 predict 메소드를 호출합니다. (내부에서 모든 전처리 수행)
-                    predicted_label = self.lgbm_predictor.predict(local_rssi_copy)
-
-                    # 3. 예측된 레이블('x_y')을 좌표로 변환합니다.
-                    x_str, y_str = predicted_label.split('_')
-                    pts_grid = (int(x_str)  , int(y_str) )
-                    pts_pixels_qpoint = self.grid_to_pixels(pts_grid)
-
-                    px_per_m_x = self.config.get('px_per_m_x', 1.0)
-                    px_per_m_y = self.config.get('px_per_m_y', 1.0)
-                    pts_meters = np.array([
-                        pts_pixels_qpoint.x() * 19 / px_per_m_x,
-                        pts_pixels_qpoint.y() * 19 / px_per_m_y
-                    ])
-                    self.ekf.update(pts_meters)
-
-                    self.fused_pos = self.ekf.get_state()[:2].flatten()
-
-                    self.map_viewer.mark_estimated_position(*self.fused_pos, self.current_yaw)
-                    self._update_navigation_path()
-
-                except Exception as e:
-                    print(f"LGBM 예측 중 오류 발생: {e}")
-
+                self.map_viewer.mark_estimated_position(*self.fused_pos, self.current_yaw)
+                self._update_navigation_path()
+            except Exception as e:
+                print(f"LGBM 예측 중 오류 발생: {e}")
 
     def _on_speed_update(self, speed):
         self.current_speed = speed
         self.ekf.predict(self.current_yaw, self.current_speed)
         self.fused_pos = self.ekf.get_state()[:2].flatten()
+        
+        # --- ▼ [추가됨] EKF 업데이트 직후 벽 회피 로직을 즉시 호출 ---
+        self._apply_wall_avoidance()
+        # --- ▲ [추가됨] ---
+
+        self.map_viewer.mark_estimated_position(*self.fused_pos, self.current_yaw)
         self._update_navigation_path()
 
     def _on_yaw_update(self, yaw):
         self.current_yaw = yaw
-        self.map_viewer.move_to(*self.fused_pos, self.current_yaw)
+        # Yaw 업데이트 시에는 위치 보정을 하지 않고 시각적 표시만 변경
+        self.map_viewer.mark_estimated_position(*self.fused_pos, self.current_yaw)
 
     def _clear_rssi_cache(self):
         self.rssi_mutex.lock(); self.rssi_data.clear(); self.rssi_mutex.unlock()
@@ -344,15 +323,15 @@ class IndoorPositioningApp(QWidget):
         if not self.ble_scanner_thread.isRunning():
             self.ble_scanner_thread.start()
             print("BLE Scan Started.")
-            # BLE 스캔 시작과 함께 1초 간격으로 벽 회피 타이머를 시작
-            if not self.wall_avoidance_timer.isActive():
-                self.wall_avoidance_timer.start(1000) # 1000ms = 1초
-                print("벽 회피 보정 타이머를 시작합니다 (1초 간격).")
+            # --- ▼ [제거됨] 타이머 시작 로직 제거 ---
+            # if not self.wall_avoidance_timer.isActive():
+            #     self.wall_avoidance_timer.start(1000)
+            #     print("벽 회피 보정 타이머를 시작합니다 (1초 간격).")
+            # --- ▲ [제거됨] ---
 
     def _on_robot_call_clicked(self):
         if not self.target_room:
             self._show_toast("로봇을 부를 목적지를 선택해주세요.", duration=2500)
-
             dialog = SelectionDialog(self)
             if dialog.exec():
                 selected = dialog.selected_room
@@ -367,13 +346,10 @@ class IndoorPositioningApp(QWidget):
             else:
                 self._show_toast("로봇 호출을 취소했습니다.", duration=2000)
                 return
-
         if self.udp_send_timer.isActive():
             self._show_toast("이미 로봇이 호출되었습니다.")
             return
-
         self.robot_arrival_processed = False
-
         self.udp_send_timer.start(1000)
         self.robot_status_widget.adjustSize()
         self._update_popup_position(self.robot_status_widget)
@@ -381,10 +357,8 @@ class IndoorPositioningApp(QWidget):
         self.robot_status_widget.raise_()
 
     def _on_robot_call_stop_clicked(self):
-        if self.udp_send_timer.isActive():
-            self.udp_send_timer.stop()
-        if self.udp_destination_timer.isActive():
-            self.udp_destination_timer.stop()
+        if self.udp_send_timer.isActive(): self.udp_send_timer.stop()
+        if self.udp_destination_timer.isActive(): self.udp_destination_timer.stop()
         self.robot_status_widget.hide()
         self.arrival_prompt_widget.hide()
         self.navigation_status_widget.hide()
@@ -399,9 +373,7 @@ class IndoorPositioningApp(QWidget):
         self.navigation_status_widget.raise_()
 
     def _stop_navigation(self, message):
-        """길안내를 중지하고 관련 UI를 정리합니다."""
-        if self.udp_destination_timer.isActive():
-            self.udp_destination_timer.stop()
+        if self.udp_destination_timer.isActive(): self.udp_destination_timer.stop()
         self.navigation_status_widget.hide()
         self.current_nav_widget.hide()
         self.target_room = None
@@ -417,81 +389,60 @@ class IndoorPositioningApp(QWidget):
             self.robot_status_widget.hide()
             self.arrival_prompt_widget.hide()
             self.navigation_status_widget.hide()
-            if self.udp_send_timer.isActive():
-                self.udp_send_timer.stop()
+            if self.udp_send_timer.isActive(): self.udp_send_timer.stop()
             self._show_toast("로봇이 도착했습니다.")
-
         elif message == "999,999":
             if not self.robot_arrival_processed:
                 self.robot_arrival_processed = True
                 print("로봇 도착 신호 (999,999) 수신. [최초 1회 처리]")
-
-                if self.udp_send_timer.isActive():
-                    self.udp_send_timer.stop()
-
+                if self.udp_send_timer.isActive(): self.udp_send_timer.stop()
                 self.robot_status_widget.hide()
-
                 self.arrival_prompt_widget.adjustSize()
                 self._update_popup_position(self.arrival_prompt_widget)
                 self.arrival_prompt_widget.show()
                 self.arrival_prompt_widget.raise_()
 
     def load_stylesheet(self, filename):
-        qss_file = QFile(filename);
+        qss_file = QFile(filename)
         if qss_file.open(QFile.ReadOnly | QFile.Text): self.setStyleSheet(QTextStream(qss_file).readAll())
         else: print(f"'{filename}' 스타일시트 로드 실패!")
 
     def meters_to_grid(self, pos_m):
-        row, col = int(pos_m[1] * self.config['px_per_m_y'] / self.BLOCK_SIZE), int(pos_m[0] * self.config['px_per_m_x'] / self.BLOCK_SIZE)
+        row = int(pos_m[1] * self.config['px_per_m_y'] / self.BLOCK_SIZE)
+        col = int(pos_m[0] * self.config['px_per_m_x'] / self.BLOCK_SIZE)
         return (row, col)
 
     def grid_to_pixels(self, pos_grid):
-        px, py = pos_grid[1] * self.BLOCK_SIZE + self.BLOCK_SIZE / 2, pos_grid[0] * self.BLOCK_SIZE + self.BLOCK_SIZE / 2
+        px = pos_grid[1] * self.BLOCK_SIZE + self.BLOCK_SIZE / 2
+        py = pos_grid[0] * self.BLOCK_SIZE + self.BLOCK_SIZE / 2
         return QPointF(px, py)
 
     def _apply_wall_avoidance(self):
-        """현재 위치가 벽에 너무 가까우면 보정합니다. (타이머에 의해 주기적으로 호출됨)"""
-        if self.fused_pos is None or self.distance_map is None:
-            return
-
+        """EKF로 추정된 현재 위치가 벽에 너무 가까우면 보정합니다."""
+        if self.fused_pos is None or self.distance_map is None: return
         current_grid = self.meters_to_grid(self.fused_pos)
         row, col = current_grid
-
         height, width = self.distance_map.shape
-        if not (0 <= row < height and 0 <= col < width):
-            return
-
+        if not (0 <= row < height and 0 <= col < width): return
         distance_to_wall = self.distance_map[row][col]
-        if distance_to_wall >= self.AVOIDANCE_THRESHOLD_GRID:
-            return
-
+        if distance_to_wall >= self.AVOIDANCE_THRESHOLD_GRID: return
+        
         grad_r = self.distance_map[min(row + 1, height - 1)][col] - self.distance_map[max(row - 1, 0)][col]
         grad_c = self.distance_map[row][min(col + 1, width - 1)] - self.distance_map[row][max(col - 1, 0)]
-
         repulsion_vector_grid = np.array([grad_c, grad_r])
-
         norm = np.linalg.norm(repulsion_vector_grid)
-        if norm < 1e-6:
-            return
-
+        if norm < 1e-6: return
+        
         direction_vector = repulsion_vector_grid / norm
-
         penetration_depth = self.AVOIDANCE_THRESHOLD_GRID - distance_to_wall
         correction_magnitude_grid = penetration_depth * self.REPULSION_STRENGTH
         correction_vector_grid = direction_vector * correction_magnitude_grid
-
+        
         correction_m_x = correction_vector_grid[0] * self.BLOCK_SIZE / self.config['px_per_m_x']
         correction_m_y = correction_vector_grid[1] * self.BLOCK_SIZE / self.config['px_per_m_y']
         correction_vector_m = np.array([correction_m_x, correction_m_y])
-
+        
         self.fused_pos += correction_vector_m
-
-        # EKF의 상태를 직접 수정하는 코드를 제거하여 충돌을 방지
-        # self.ekf.x[:2] = self.fused_pos.reshape(2, 1)
-
-        # 보정된 위치를 지도에 즉시 반영
-        self.map_viewer.mark_estimated_position(*self.fused_pos, self.current_yaw)
-
         print(f"벽 회피 적용: ({correction_m_x:.2f}, {correction_m_y:.2f})m 보정됨")
 
     def closeEvent(self, event):
@@ -499,13 +450,11 @@ class IndoorPositioningApp(QWidget):
         self.udp_receiver.stop()
         self.ble_scanner_thread.stop()
         if self.serial_reader: self.serial_reader.stop()
-
-        # 프로그램 종료 시 벽 회피 타이머 정지
-        if self.wall_avoidance_timer.isActive():
-            self.wall_avoidance_timer.stop()
-
+        # --- ▼ [제거됨] 타이머 정지 로직 제거 ---
+        # if self.wall_avoidance_timer.isActive():
+        #     self.wall_avoidance_timer.stop()
+        # --- ▲ [제거됨] ---
         super().closeEvent(event)
-
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
