@@ -509,13 +509,11 @@ class IndoorPositioningApp(QWidget):
         grad_c = self.distance_map[row][min(col + 1, width - 1)] - self.distance_map[row][max(col - 1, 0)]
 
         repulsion_vector_grid = np.array([grad_c, grad_r])
-
         norm = np.linalg.norm(repulsion_vector_grid)
         if norm < 1e-6:
             return
 
         direction_vector = repulsion_vector_grid / norm
-
         penetration_depth = self.AVOIDANCE_THRESHOLD_GRID - distance_to_wall
         correction_magnitude_grid = penetration_depth * self.REPULSION_STRENGTH
         correction_vector_grid = direction_vector * correction_magnitude_grid
@@ -526,22 +524,19 @@ class IndoorPositioningApp(QWidget):
 
         # fused_pos와 EKF 상태 동시에 보정
         self.fused_pos += correction_vector_m
-        # main.py의 _apply_wall_avoidance 함수 안에 있는 코드 (수정 전)
-
         try:
-            # 1차원 배열인 self.ekf.x에 2차원 인덱싱을 사용해서 오류 발생!
-            self.ekf.x[0, 0] = self.fused_pos[0] 
-            self.ekf.x[1, 0] = self.fused_pos[1]
+            # --- 바로 이 부분입니다! 2차원 인덱싱 [0, 0]을 1차원 [0]으로 수정합니다. ---
+            self.ekf.x[0] = self.fused_pos[0]
+            self.ekf.x[1] = self.fused_pos[1]
             
             if hasattr(self.ekf, "P"):
                 self.ekf.P[:2, :2] *= 1.2
+                
         except Exception as e:
-            # 이 오류 메시지가 출력되고 있었습니다.
             print(f"EKF 상태 보정 중 오류 발생: {e}")
 
         # 보정된 위치를 지도에 즉시 반영
         self.map_viewer.mark_estimated_position(*self.fused_pos, self.current_yaw)
-
         print(f"벽 회피 적용: ({correction_m_x:.2f}, {correction_m_y:.2f})m 보정됨")
 
     def closeEvent(self, event):
