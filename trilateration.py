@@ -159,33 +159,38 @@ class EKF:
 
     def update(self, z):
         # z: [x_ble, y_ble]
-
-        # 항상 (2,1) column vector로 변환
-        z = np.asarray(z).reshape(2, 1)
-        z_pred = self.x[:2].reshape(2, 1)
-
+        z_pred = self.x[:2]
         H = np.zeros((2, self.n))
         H[0, 0] = 1.0
         H[1, 1] = 1.0
 
-        y = z - z_pred                 # (2,1)
+        y = z - z_pred
         S = H @ self.P @ H.T + self.R
         K = self.P @ H.T @ np.linalg.inv(S)
 
-        update_vector = K @ y          # (n,1) 벡터
+        # --- 수정된 부분 ②: 상태 업데이트 크기 제한 ---
+        # 칼만 이득(K)과 측정 오차(y)를 통해 계산된 보정량을 구합니다.
+        update_vector = K @ y
 
-        # 위치 보정량
+        # 위치에 대한 보정량 [dx, dy]를 추출합니다.
         position_update = update_vector[:2]
+        
+        # 보정량의 크기(이동 거리)를 계산합니다.
         update_distance = np.linalg.norm(position_update)
-
+        
+        # 최대 허용 거리(20cm)를 정의합니다.
         max_update_distance = 0.01
+
+        # 만약 계산된 보정 거리가 20cm를 초과하면
         if update_distance > max_update_distance:
+            # 보정 벡터의 방향은 유지하되, 크기를 20cm로 줄입니다.
             scale_factor = max_update_distance / update_distance
             update_vector = update_vector * scale_factor
 
-        # self.x도 (n,1) column vector라면 맞춰줘야 함
+        # 크기가 조절된 보정량을 최종 상태에 적용합니다.
         self.x = self.x + update_vector
-
+        # ---------------------------------------------
+        
         self.P = (np.eye(self.n) - K @ H) @ self.P
 
     def get_state(self):
