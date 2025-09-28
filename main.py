@@ -62,6 +62,11 @@ class IndoorPositioningApp(QWidget):
         self.udp_socket, self.udp_send_timer = socket.socket(socket.AF_INET, socket.SOCK_DGRAM), QTimer(self)
         self.udp_destination_timer = QTimer(self)
         self.udp_receiver = UDPReceiverThread(port=self.config.get('udp_listen_port', 5006))
+
+        # --- ▼ [추가됨] 벽 회피 보정을 위한 타이머 ---
+        self.wall_avoidance_timer = QTimer(self)
+        # --- ▲ [추가됨] ---
+
         self._init_logic_components(); self._init_ui(); self._connect_signals(); self._start_timers()
 
     def _init_logic_components(self):
@@ -174,6 +179,10 @@ class IndoorPositioningApp(QWidget):
         self.udp_destination_timer.timeout.connect(self._send_destination_udp)
         self.udp_receiver.message_received.connect(self._on_robot_message_received)
         self.robot_tracker.robot_position_updated.connect(self._on_robot_position_update)
+        
+        # --- ▼ [추가됨] 벽 회피 타이머의 timeout 신호를 _apply_wall_avoidance 메서드에 연결 ---
+        self.wall_avoidance_timer.timeout.connect(self._apply_wall_avoidance)
+        # --- ▲ [추가됨] ---
 
     def _start_timers(self):
         self.rssi_clear_timer = QTimer(self); self.rssi_clear_timer.timeout.connect(self._clear_rssi_cache); self.rssi_clear_timer.start(2000)
@@ -285,9 +294,9 @@ class IndoorPositioningApp(QWidget):
 
                     self.fused_pos = self.ekf.get_state()[:2]
                     
-                    # --- ▼ [수정됨] 비콘 위치 추정 직후, 벽 보정 로직을 직접 호출 ---
-                    self._apply_wall_avoidance()
-                    # --- ▲ [수정됨] ---
+                    # --- ▼ [제거됨] 벽 보정 로직 직접 호출 코드를 제거하고 타이머에 맡깁니다. ---
+                    # self._apply_wall_avoidance()
+                    # --- ▲ [제거됨] ---
 
                     self.map_viewer.mark_estimated_position(*self.fused_pos, self.current_yaw)
                     self._update_navigation_path()
@@ -325,7 +334,14 @@ class IndoorPositioningApp(QWidget):
             self.current_nav_widget.hide()
             
     def _start_ble_scan(self):
-        if not self.ble_scanner_thread.isRunning(): self.ble_scanner_thread.start(); print("BLE Scan Started.")
+        if not self.ble_scanner_thread.isRunning(): 
+            self.ble_scanner_thread.start()
+            print("BLE Scan Started.")
+            # --- ▼ [추가됨] BLE 스캔 시작과 함께 1초 간격으로 벽 회피 타이머를 시작 ---
+            if not self.wall_avoidance_timer.isActive():
+                self.wall_avoidance_timer.start(1000) # 1000ms = 1초
+                print("벽 회피 보정 타이머를 시작합니다 (1초 간격).")
+            # --- ▲ [추가됨] ---
     
     def _on_robot_call_clicked(self):
         if not self.target_room:
@@ -428,7 +444,7 @@ class IndoorPositioningApp(QWidget):
         return QPointF(px, py)
         
     def _apply_wall_avoidance(self):
-        """현재 위치가 벽에 너무 가까우면 보정합니다."""
+        """현재 위치가 벽에 너무 가까우면 보정합니다. (타이머에 의해 주기적으로 호출됨)"""
         if self.fused_pos is None or self.distance_map is None:
             return
 
@@ -465,6 +481,10 @@ class IndoorPositioningApp(QWidget):
         self.fused_pos += correction_vector_m
         self.ekf.x[:2] = self.fused_pos.reshape(2, 1)
         
+        # --- ▼ [추가됨] 보정된 위치를 지도에 즉시 반영 ---
+        self.map_viewer.mark_estimated_position(*self.fused_pos, self.current_yaw)
+        # --- ▲ [추가됨] ---
+        
         print(f"벽 회피 적용: ({correction_m_x:.2f}, {correction_m_y:.2f})m 보정됨")
 
     def closeEvent(self, event):
@@ -472,6 +492,12 @@ class IndoorPositioningApp(QWidget):
         self.udp_receiver.stop()
         self.ble_scanner_thread.stop()
         if self.serial_reader: self.serial_reader.stop()
+        
+        # --- ▼ [추가됨] 프로그램 종료 시 벽 회피 타이머 정지 ---
+        if self.wall_avoidance_timer.isActive():
+            self.wall_avoidance_timer.stop()
+        # --- ▲ [추가됨] ---
+
         super().closeEvent(event)
 
 
