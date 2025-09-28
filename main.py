@@ -230,6 +230,14 @@ class IndoorPositioningApp(QWidget):
             # self.ekf.get_state()는 1차원 배열을 반환하므로 [:2] 슬라이싱은 안전합니다.
             self.fused_pos = self.ekf.get_state()[:2]
 
+            pos_after = self.fused_pos
+            change_vector = pos_after - pos_before
+            change_distance = np.linalg.norm(change_vector)
+            
+            # 터미널에 보정된 값을 출력합니다.
+            print(f"랜덤 업데이트 적용: ({change_vector[0]:.2f}, {change_vector[1]:.2f})m 보정됨. 이동거리: {change_distance:.2f}m")
+
+
         except Exception as e:
             print(f"랜덤 측정값 업데이트 중 오류 발생: {e}")
 
