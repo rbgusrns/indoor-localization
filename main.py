@@ -50,7 +50,7 @@ class IndoorPositioningApp(QWidget):
         self.rssi_mutex, self.rssi_data = QMutex(), {}
         # fused_pos를 튜플이 아닌 NumPy 배열로 초기화
         self.current_speed, self.current_yaw, self.fused_pos = 0.0, 180.0, np.array([0.0, 0.0])
-        self.target_room, self.last_start_grid, self.BLOCK_SIZE = None, None, 5
+        self.target_room, self.last_start_grid, self.BLOCK_SIZE = None, None, 10
 
         # 벽 회피 기능 파라미터
         self.AVOIDANCE_THRESHOLD_GRID = 50
