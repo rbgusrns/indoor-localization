@@ -53,8 +53,8 @@ class IndoorPositioningApp(QWidget):
         self.target_room, self.last_start_grid, self.BLOCK_SIZE = None, None, 10
 
         # 벽 회피 기능 파라미터
-        self.AVOIDANCE_THRESHOLD_GRID = 50
-        self.CENTERING_STRENGTH = 1 # 그리드 중앙으로 보정하는 강도
+        self.AVOIDANCE_THRESHOLD_GRID = 5
+        self.CENTERING_STRENGTH = 0.5 # 그리드 중앙으로 보정하는 강도
 
         self.robot_arrival_processed = False
 
