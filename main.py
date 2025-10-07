@@ -514,10 +514,10 @@ class IndoorPositioningApp(QWidget):
             center_pos_m = np.array([center_m_x, center_m_y])
 
             # 2. 현재 위치에서 그리드 중심으로 향하는 보정 벡터를 계산합니다.
-            correction_vector_m = self.CENTERING_STRENGTH
+            correction_vector_m = (center_pos_m - self.fused_pos) * self.CENTERING_STRENGTH
 
             # 3. fused_pos와 EKF 상태를 동시에 보정합니다.
-            self.fused_pos += correction_vector_m
+            self.fused_pos += correction_vector_m * self.CENTERING_STRENGTH
             try:
                 self.ekf.x[0] = self.fused_pos[0]
                 self.ekf.x[1] = self.fused_pos[1]
