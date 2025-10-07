@@ -294,6 +294,9 @@ class IndoorPositioningApp(QWidget):
                     # 3. 예측된 레이블('x_y')을 좌표로 변환합니다.
                     x_str, y_str = predicted_label.split('_')
                     pts_grid = (int(x_str)  , int(y_str) )
+                    
+                    print(f"🎯 모델 예측 그리드: {pts_grid}")
+                    
                     pts_pixels_qpoint = self.grid_to_pixels(pts_grid)
 
                     px_per_m_x = self.config.get('px_per_m_x', 1.0)
