@@ -505,8 +505,8 @@ class IndoorPositioningApp(QWidget):
         center_pixels_qpoint = self.grid_to_pixels(current_grid)
 
         # 2. 중심 픽셀 좌표를 미터 단위로 변환합니다.
-        center_m_x = center_pixels_qpoint.x() / self.config['px_per_m_x']
-        center_m_y = center_pixels_qpoint.y() / self.config['px_per_m_y']
+        center_m_x = center_pixels_qpoint.x() * 19 / self.config['px_per_m_x']
+        center_m_y = center_pixels_qpoint.y() * 19 / self.config['px_per_m_y']
         center_pos_m = np.array([center_m_x, center_m_y])
 
         # 3. 현재 위치에서 그리드 중심으로 향하는 보정 벡터를 계산하고,
