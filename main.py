@@ -53,7 +53,7 @@ class IndoorPositioningApp(QWidget):
         self.target_room, self.last_start_grid, self.BLOCK_SIZE = None, None, 10
 
         # 벽 회피 기능 파라미터
-        self.AVOIDANCE_THRESHOLD_GRID = 100
+        self.AVOIDANCE_THRESHOLD_GRID = 50
         self.CONSTANT_CORRECTION_DISTANCE = 0.05
 
         self.robot_arrival_processed = False
@@ -511,9 +511,6 @@ class IndoorPositioningApp(QWidget):
             vector_to_center = center_pos_m - self.fused_pos
             norm = np.linalg.norm(vector_to_center)
 
-            # 이미 중앙에 매우 가까우면 (예: 1cm 이내) 보정을 건너뜁니다.
-            if norm < 0.01:
-                return
             
             # 방향 벡터를 정규화 (크기를 1로 만듦)
             direction_vector = vector_to_center / norm
