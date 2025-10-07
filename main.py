@@ -495,7 +495,7 @@ class IndoorPositioningApp(QWidget):
         
         print(f"현재 그리드: {self.fused_pos}")
         row, col = current_grid
-
+        # row가 y, col이 x
         height, width = self.distance_map.shape
         if not (0 <= row < height and 0 <= col < width):
             return
@@ -509,8 +509,8 @@ class IndoorPositioningApp(QWidget):
         center_pixels_qpoint = self.grid_to_pixels(current_grid)
 
         # 2. 중심 픽셀 좌표를 미터 단위로 변환합니다.
-        center_m_x = center_pixels_qpoint.x() * 19 / self.config['px_per_m_x']
-        center_m_y = center_pixels_qpoint.y() * 19 / self.config['px_per_m_y']
+        center_m_x = center_pixels_qpoint.x()  / self.config['px_per_m_x']
+        center_m_y = center_pixels_qpoint.y()  / self.config['px_per_m_y']
         center_pos_m = np.array([center_m_x, center_m_y])
         print(f"벽 회피 보정: 현재 그리드 {current_grid} 중심 위치 ({center_pos_m[0]:.2f}, {center_pos_m[1]:.2f})m")
         # 3. 현재 위치에서 그리드 중심으로 향하는 보정 벡터를 계산하고,
