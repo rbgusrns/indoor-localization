@@ -54,7 +54,7 @@ class IndoorPositioningApp(QWidget):
 
         # 벽 회피 기능 파라미터
         self.AVOIDANCE_THRESHOLD_GRID = 50
-        self.REPULSION_STRENGTH = 0.03
+        self.CENTERING_STRENGTH = 0.1 # 그리드 중앙으로 보정하는 강도
 
         self.robot_arrival_processed = False
 
@@ -485,7 +485,7 @@ class IndoorPositioningApp(QWidget):
         return QPointF(px, py)
 
     def _apply_wall_avoidance(self):
-        """현재 위치가 벽에 너무 가까우면 보정합니다. (타이머에 의해 주기적으로 호출됨)"""
+        """현재 위치가 벽에 너무 가까우면 현재 그리드의 중심으로 위치를 보정합니다."""
         if self.fused_pos is None or self.distance_map is None:
             return
 
@@ -497,45 +497,42 @@ class IndoorPositioningApp(QWidget):
             return
 
         distance_to_wall = self.distance_map[row][col]
+        # 벽과의 거리가 설정된 임계값보다 가까울 때만 보정 로직을 실행합니다.
         if distance_to_wall >= self.AVOIDANCE_THRESHOLD_GRID:
             return
 
-        # 거리 맵 그라디언트 근사
-        grad_r = self.distance_map[min(row + 1, height - 1)][col] - self.distance_map[max(row - 1, 0)][col]
-        grad_c = self.distance_map[row][min(col + 1, width - 1)] - self.distance_map[row][max(col - 1, 0)]
+        # 1. 현재 그리드의 중심 픽셀 좌표를 계산합니다.
+        center_pixels_qpoint = self.grid_to_pixels(current_grid)
 
-        repulsion_vector_grid = np.array([grad_c, grad_r])
-        norm = np.linalg.norm(repulsion_vector_grid)
-        if norm < 1e-6:
-            return
+        # 2. 중심 픽셀 좌표를 미터 단위로 변환합니다.
+        center_m_x = center_pixels_qpoint.x() / self.config['px_per_m_x']
+        center_m_y = center_pixels_qpoint.y() / self.config['px_per_m_y']
+        center_pos_m = np.array([center_m_x, center_m_y])
 
-        direction_vector = repulsion_vector_grid / norm
-        penetration_depth = self.AVOIDANCE_THRESHOLD_GRID - distance_to_wall
-        correction_magnitude_grid = penetration_depth * self.REPULSION_STRENGTH
-        correction_vector_grid = direction_vector * correction_magnitude_grid
+        # 3. 현재 위치에서 그리드 중심으로 향하는 보정 벡터를 계산하고,
+        #    보정 강도를 적용하여 이동량을 조절합니다.
+        correction_vector_m = (center_pos_m - self.fused_pos) * self.CENTERING_STRENGTH
 
-        correction_m_x = correction_vector_grid[0] * self.BLOCK_SIZE / self.config['px_per_m_x']
-        correction_m_y = correction_vector_grid[1] * self.BLOCK_SIZE / self.config['px_per_m_y']
-        correction_vector_m = np.array([correction_m_x, correction_m_y])
-
-        # fused_pos와 EKF 상태 동시에 보정
+        # 4. fused_pos와 EKF 상태를 동시에 보정합니다.
         self.fused_pos += correction_vector_m
         try:
-            
             self.ekf.x[0] = self.fused_pos[0]
             self.ekf.x[1] = self.fused_pos[1]
             
             if hasattr(self.ekf, "P"):
+                # 위치 보정에 대한 불확실성을 약간 증가시켜 EKF가 새로운 측정에 더 잘 반응하도록 합니다.
                 self.ekf.P[:2, :2] *= 1.2
                 
         except Exception as e:
             print(f"EKF 상태 보정 중 오류 발생: {e}")
 
-        # 보정된 위치를 지도에 즉시 반영
+        # 5. 보정된 위치를 지도에 즉시 반영합니다.
         self.map_viewer.mark_estimated_position(*self.fused_pos, self.current_yaw)
-        print(f"벽 회피 적용: ({correction_m_x:.2f}, {correction_m_y:.2f})m 보정됨")
+        print(f"그리드 중앙 보정 적용: ({correction_vector_m[0]:.2f}, {correction_vector_m[1]:.2f})m 보정됨")
 
+        # 6. 보정된 위치를 기반으로 경로를 다시 계산합니다.
         self._update_navigation_path()
+
 
     def closeEvent(self, event):
         self.robot_tracker.stop()
