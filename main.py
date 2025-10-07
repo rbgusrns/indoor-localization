@@ -53,7 +53,7 @@ class IndoorPositioningApp(QWidget):
         self.target_room, self.last_start_grid, self.BLOCK_SIZE = None, None, 10
 
         # 벽 회피 기능 파라미터
-        self.AVOIDANCE_THRESHOLD_GRID = 50
+        self.AVOIDANCE_THRESHOLD_GRID = 1
         self.CONSTANT_CORRECTION_DISTANCE = 0.05
 
         self.robot_arrival_processed = False
