@@ -79,18 +79,13 @@ class IndoorPositioningApp(QWidget):
         else:
             self.close()
         self.ekf = EKF(self.config.get('ekf_dt', 1.0))
-        try:
-            # pkl 파일을 일단 딕셔너리로 불러옵니다.
-            loaded_data = joblib.load('lgbm_predictor.pkl')
-            # 딕셔너리에서 'model' 키를 사용해 실제 모델 객체를 꺼내와 변수에 할당합니다.
-            self.lgbm_predictor = loaded_data['model'] 
-            print("저장된 LGBM Predictor 객체를 성공적으로 불러왔습니다.")
-        except FileNotFoundError:
-            print("오류: 저장된 Predictor 파일(lgbm_predictor.pkl)을 찾을 수 없습니다.")
+
+        # LGBM Predictor 객체를 먼저 생성하고,
+        # 그 객체의 load_model 메소드를 통해 모델과 전처리 정보를 모두 불러옵니다.
+        self.lgbm_predictor = LGBM_Classifier_Predictor()
+        if not self.lgbm_predictor.load_model('lgbm_predictor.pkl'):
+            # load_model()이 파일을 못찾는 등 실패하면(False 반환), lgbm_predictor를 None으로 설정합니다.
             self.lgbm_predictor = None
-                    
-        except TypeError: # 만약 pkl 파일이 딕셔너리가 아닌 경우를 대비
-            self.lgbm_predictor = joblib.load('lgbm_predictor.pkl')
 
         self.ble_scanner_thread = BLEScanThread(self.config)
         try:
