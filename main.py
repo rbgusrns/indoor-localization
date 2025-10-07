@@ -281,7 +281,7 @@ class IndoorPositioningApp(QWidget):
         local_rssi_copy = self.rssi_data.copy()
         self.rssi_mutex.unlock()
 
-        if len(local_rssi_copy) >= 3:
+        if len(local_rssi_copy) >= 5:
             if self.lgbm_predictor:
                 try:
                     # 1. IMU 센서에서 받은 Yaw 값으로 현재 방향('N' 등)을 결정합니다.
