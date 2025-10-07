@@ -80,11 +80,18 @@ class IndoorPositioningApp(QWidget):
             self.close()
         self.ekf = EKF(self.config.get('ekf_dt', 1.0))
         try:
-            self.lgbm_predictor = joblib.load('lgbm_predictor.pkl')
+            # pkl 파일을 일단 딕셔너리로 불러옵니다.
+            loaded_data = joblib.load('lgbm_predictor.pkl')
+            # 딕셔너리에서 'model' 키를 사용해 실제 모델 객체를 꺼내와 변수에 할당합니다.
+            self.lgbm_predictor = loaded_data['model'] 
             print("저장된 LGBM Predictor 객체를 성공적으로 불러왔습니다.")
         except FileNotFoundError:
             print("오류: 저장된 Predictor 파일(lgbm_predictor.pkl)을 찾을 수 없습니다.")
             self.lgbm_predictor = None
+                    
+        except TypeError: # 만약 pkl 파일이 딕셔너리가 아닌 경우를 대비
+            self.lgbm_predictor = joblib.load('lgbm_predictor.pkl')
+
         self.ble_scanner_thread = BLEScanThread(self.config)
         try:
             imu_port, baudrate = self.config.get('imu_port', '/dev/ttyUSB0'), self.config.get('imu_baudrate', 115200)
@@ -488,7 +495,7 @@ class IndoorPositioningApp(QWidget):
         # fused_pos와 EKF 상태 동시에 보정
         self.fused_pos += correction_vector_m
         try:
-            # --- 바로 이 부분입니다! 2차원 인덱싱 [0, 0]을 1차원 [0]으로 수정합니다. ---
+            
             self.ekf.x[0] = self.fused_pos[0]
             self.ekf.x[1] = self.fused_pos[1]
             
