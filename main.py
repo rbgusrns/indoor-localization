@@ -493,7 +493,7 @@ class IndoorPositioningApp(QWidget):
         #fused_pos는 0,0 ~ 4,3
         current_grid = self.meters_to_grid(self.fused_pos)
         
-        print(f"현재 그리드: {current_grid}")
+        print(f"현재 그리드: {self.fused_pos}")
         row, col = current_grid
 
         height, width = self.distance_map.shape
