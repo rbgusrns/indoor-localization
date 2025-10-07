@@ -54,7 +54,7 @@ class IndoorPositioningApp(QWidget):
 
         # 벽 회피 기능 파라미터
         self.AVOIDANCE_THRESHOLD_GRID = 50
-        self.CENTERING_STRENGTH = 0.5 # 그리드 중앙으로 보정하는 강도
+        self.CONSTANT_CORRECTION_DISTANCE = 0.05
 
         self.robot_arrival_processed = False
 
@@ -485,12 +485,11 @@ class IndoorPositioningApp(QWidget):
         return QPointF(px, py)
 
     def _apply_wall_avoidance(self):
-            """현재 위치가 벽에 너무 가까우면 1x1m 그리드의 중심으로 위치를 보정합니다."""
+            """현재 위치가 벽에 너무 가까우면 1x1m 그리드의 중심으로 '일정한 거리만큼' 위치를 보정합니다."""
             if self.fused_pos is None or self.distance_map is None:
                 return
 
             # --- 보정 로직 실행 여부를 결정하는 부분 (기존 로직 유지) ---
-            # 이 부분은 픽셀 기반의 상세한 벽과의 거리를 체크하여, 보정이 필요한 상황인지를 판단합니다.
             current_grid = self.meters_to_grid(self.fused_pos)
             row, col = current_grid
             
@@ -499,39 +498,44 @@ class IndoorPositioningApp(QWidget):
                 return
 
             distance_to_wall = self.distance_map[row][col]
-            # 벽과의 거리가 설정된 임계값보다 가까울 때만 아래의 보정 로직을 실행합니다.
             if distance_to_wall >= self.AVOIDANCE_THRESHOLD_GRID:
                 return
             # --- 여기까지 ---
 
-
-            # --- 실제 위치를 보정하는 부분 (요청에 따라 새롭게 변경된 로직) ---
-
             # 1. 현재 미터 좌표를 기준으로 가장 가까운 1x1m 그리드의 중심점을 계산합니다.
-            #    예: 위치가 (2.7, 1.2)m 이면, 중심은 (floor(2.7)+0.5, floor(1.2)+0.5) = (2.5, 1.5)m가 됩니다.
             center_m_x = np.floor(self.fused_pos[0]) + 0.5
             center_m_y = np.floor(self.fused_pos[1]) + 0.5
             center_pos_m = np.array([center_m_x, center_m_y])
 
-            # 2. 현재 위치에서 그리드 중심으로 향하는 보정 벡터를 계산합니다.
-            correction_vector_m = (center_pos_m - self.fused_pos) * self.CENTERING_STRENGTH
+            # 2. 현재 위치에서 그리드 중심으로 향하는 '방향'을 구합니다.
+            vector_to_center = center_pos_m - self.fused_pos
+            norm = np.linalg.norm(vector_to_center)
 
-            # 3. fused_pos와 EKF 상태를 동시에 보정합니다.
-            self.fused_pos += correction_vector_m * self.CENTERING_STRENGTH
+            # 이미 중앙에 매우 가까우면 (예: 1cm 이내) 보정을 건너뜁니다.
+            if norm < 0.01:
+                return
+            
+            # 방향 벡터를 정규화 (크기를 1로 만듦)
+            direction_vector = vector_to_center / norm
+
+            # 3. '일정한 거리'만큼 해당 방향으로 보정 벡터를 생성합니다.
+            correction_vector_m = direction_vector * self.CONSTANT_CORRECTION_DISTANCE
+
+            # 4. fused_pos와 EKF 상태를 동시에 보정합니다.
+            self.fused_pos += correction_vector_m
             try:
                 self.ekf.x[0] = self.fused_pos[0]
                 self.ekf.x[1] = self.fused_pos[1]
                 
                 if hasattr(self.ekf, "P"):
-                    # 위치 보정에 대한 불확실성을 약간 증가시켜 EKF가 새로운 측정에 더 잘 반응하도록 합니다.
                     self.ekf.P[:2, :2] *= 1.2
                     
             except Exception as e:
                 print(f"EKF 상태 보정 중 오류 발생: {e}")
 
-            # 4. 보정된 위치를 지도에 즉시 반영하고 경로를 다시 계산합니다.
+            # 5. 보정된 위치를 지도에 즉시 반영하고 경로를 다시 계산합니다.
             self.map_viewer.mark_estimated_position(*self.fused_pos, self.current_yaw)
-            print(f"✅ 1x1m 그리드 중앙 보정 적용: ({correction_vector_m[0]:.2f}, {correction_vector_m[1]:.2f})m 보정됨 -> 새 위치: ({self.fused_pos[0]:.2f}, {self.fused_pos[1]:.2f})m")
+            print(f"✅ 일정 거리 중앙 보정 적용: ({correction_vector_m[0]:.2f}, {correction_vector_m[1]:.2f})m 보정됨 -> 새 위치: ({self.fused_pos[0]:.2f}, {self.fused_pos[1]:.2f})m")
             self._update_navigation_path()
 
 
