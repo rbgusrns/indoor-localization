@@ -508,7 +508,7 @@ class IndoorPositioningApp(QWidget):
         center_m_x = center_pixels_qpoint.x() * 19 / self.config['px_per_m_x']
         center_m_y = center_pixels_qpoint.y() * 19 / self.config['px_per_m_y']
         center_pos_m = np.array([center_m_x, center_m_y])
-
+        print(f"벽 회피 보정: 현재 그리드 {current_grid} 중심 위치 ({center_pos_m[0]:.2f}, {center_pos_m[1]:.2f})m")
         # 3. 현재 위치에서 그리드 중심으로 향하는 보정 벡터를 계산하고,
         #    보정 강도를 적용하여 이동량을 조절합니다.
         correction_vector_m = (center_pos_m - self.fused_pos) * self.CENTERING_STRENGTH
