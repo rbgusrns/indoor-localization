@@ -54,7 +54,7 @@ class IndoorPositioningApp(QWidget):
 
         # 벽 회피 기능 파라미터
         self.AVOIDANCE_THRESHOLD_GRID = 50
-        self.CENTERING_STRENGTH = 0.001 # 그리드 중앙으로 보정하는 강도
+        self.CENTERING_STRENGTH = 5 # 그리드 중앙으로 보정하는 강도
 
         self.robot_arrival_processed = False
 
