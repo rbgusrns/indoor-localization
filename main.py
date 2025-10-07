@@ -188,6 +188,32 @@ class IndoorPositioningApp(QWidget):
         # 벽 회피 타이머의 timeout 신호를 _apply_wall_avoidance 메서드에 연결
         self.wall_avoidance_timer.timeout.connect(self._apply_wall_avoidance)
 
+    # --- 키 입력 이벤트 핸들러 추가 ---
+    def keyPressEvent(self, event):
+        """키보드 입력을 처리합니다."""
+        super().keyPressEvent(event)
+        if event.key() == Qt.Key_R:
+            print("'R' 키 입력 감지. pts_grid를 (2, 3)으로 수동 설정합니다.")
+            try:
+                pts_grid = (2, 3)
+                print(f"🎯 모델 예측 그리드 (수동 설정): {pts_grid}")
+
+                pts_pixels_qpoint = self.grid_to_pixels(pts_grid)
+
+                px_per_m_x = self.config.get('px_per_m_x', 1.0)
+                px_per_m_y = self.config.get('px_per_m_y', 1.0)
+                # pts_meters 계산식 수정
+                pts_meters = np.array([
+                    pts_pixels_qpoint.x() / px_per_m_x,
+                    pts_pixels_qpoint.y() / px_per_m_y
+                ])
+                self.ekf.update(pts_meters)
+                self.fused_pos = self.ekf.get_state()[:2].flatten()
+                self.map_viewer.mark_estimated_position(*self.fused_pos, self.current_yaw)
+                self._update_navigation_path()
+            except Exception as e:
+                print(f"수동 위치 설정 중 오류 발생: {e}")
+
 
     def _start_timers(self):
         self.rssi_clear_timer = QTimer(self); self.rssi_clear_timer.timeout.connect(self._clear_rssi_cache); self.rssi_clear_timer.start(2000)
@@ -301,9 +327,10 @@ class IndoorPositioningApp(QWidget):
 
                     px_per_m_x = self.config.get('px_per_m_x', 1.0)
                     px_per_m_y = self.config.get('px_per_m_y', 1.0)
+                    # pts_meters 계산식 수정
                     pts_meters = np.array([
-                        pts_pixels_qpoint.x() * 19 / px_per_m_x,
-                        pts_pixels_qpoint.y() * 19 / px_per_m_y
+                        pts_pixels_qpoint.x() / px_per_m_x,
+                        pts_pixels_qpoint.y() / px_per_m_y
                     ])
                     self.ekf.update(pts_meters)
 
