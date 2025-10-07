@@ -490,7 +490,10 @@ class IndoorPositioningApp(QWidget):
             return
 
         print(f"벽 회피 보정 실행: 현재 위치 ({self.fused_pos[0]:.2f}, {self.fused_pos[1]:.2f})m, Yaw {self.current_yaw:.2f}°")
+        #fused_pos는 0,0 ~ 4,3
         current_grid = self.meters_to_grid(self.fused_pos)
+        
+        print(f"현재 그리드: {current_grid}")
         row, col = current_grid
 
         height, width = self.distance_map.shape
