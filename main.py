@@ -489,6 +489,7 @@ class IndoorPositioningApp(QWidget):
         if self.fused_pos is None or self.distance_map is None:
             return
 
+        print(f"벽 회피 보정 실행: 현재 위치 ({self.fused_pos[0]:.2f}, {self.fused_pos[1]:.2f})m, Yaw {self.current_yaw:.2f}°")
         current_grid = self.meters_to_grid(self.fused_pos)
         row, col = current_grid
 
