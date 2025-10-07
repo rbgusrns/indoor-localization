@@ -13,7 +13,7 @@ warnings.filterwarnings('ignore')
 class LGBM_Classifier_Predictor:
     def __init__(self):
         self.model = None
-        self.beacon_columns = None
+        ## [수정] feature_columns만 있으면 충분하므로 beacon_columns는 제거합니다.
         self.feature_columns = None
 
     def _prepare_data(self, db_path):
@@ -35,12 +35,15 @@ class LGBM_Classifier_Predictor:
             records.append(record)
         
         df = pd.DataFrame(records)
+        ## [설명] MAC 주소의 ':' 문자를 '_'로 변경하여 컬럼명으로 사용하기 쉽게 만듭니다.
         df.rename(columns=lambda c: c.replace(':', '_'), inplace=True)
 
         df['pos_label'] = df['x'].astype(str) + '_' + df['y'].astype(str)
         
-        self.beacon_columns = [col for col in df.columns if col not in ['x', 'y', 'direction', 'pos_label']]
-        df[self.beacon_columns] = df[self.beacon_columns].fillna(-100)
+        beacon_columns = [col for col in df.columns if col not in ['x', 'y', 'direction', 'pos_label']]
+        df[beacon_columns] = df[beacon_columns].fillna(-100)
+        
+        # 'direction' 컬럼을 원-핫 인코딩으로 변환합니다.
         df = pd.get_dummies(df, columns=['direction'], prefix='dir')
         
         X = df.drop(['x', 'y', 'pos_label'], axis=1)
@@ -48,11 +51,14 @@ class LGBM_Classifier_Predictor:
         
         return X, y
 
-    def train(self, db_path="fingerprint_db_4dir.json", test_size=0.3): # [수정] test_size 기본값 변경
+    def train(self, db_path="fingerprint_db_4dir.json", test_size=0.3):
         """데이터를 불러와 LightGBM 분류 모델을 학습하고 정확도를 평가합니다."""
         X, y = self._prepare_data(db_path)
         if X is None:
             return
+
+        # 학습에 사용된 최종 피처 컬럼들을 저장합니다. (원-핫 인코딩 포함)
+        self.feature_columns = X.columns.tolist()
 
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=test_size, random_state=42, stratify=y
@@ -67,8 +73,6 @@ class LGBM_Classifier_Predictor:
         y_pred = self.model.predict(X_test)
         accuracy = accuracy_score(y_test, y_pred)
         print(f"✅ 모델 검증 정확도: {accuracy:.4f}")
-        
-        self.feature_columns = X.columns
 
     def predict(self, live_rssi_vector):
         """실시간 RSSI 벡터를 입력받아 위치 레이블(예: '2_2')을 예측합니다."""
@@ -76,26 +80,24 @@ class LGBM_Classifier_Predictor:
             print("오류: 모델이 학습되지 않았습니다. train() 또는 load_model()을 먼저 호출하세요.")
             return None
 
-        # 1. 실시간 데이터를 DataFrame으로 변환
+        # 1. 실시간 데이터를 DataFrame으로 변환하고 컬럼명을 학습 데이터와 맞게 수정
         sanitized_live_data = {k.replace(':', '_'): v for k, v in live_rssi_vector.items()}
         live_df = pd.DataFrame([sanitized_live_data])
 
-        # 2. 학습된 컬럼 순서에 맞게 DataFrame을 재구성하고 기본값(-100) 설정
+        ## [수정] Pandas의 get_dummies와 reindex를 함께 사용하여 전처리 과정을 자동화하고 단순화합니다.
+        # 2. 'direction' 컬럼을 원-핫 인코딩 처리
+        live_df = pd.get_dummies(live_df)
+
+        # 3. 학습된 전체 피처 컬럼 순서에 맞게 DataFrame을 재구성합니다.
+        #    - live_df에 없는 컬럼은 새로 추가되고 fill_value로 채워집니다. (예: 잡히지 않은 비콘, 다른 방향)
+        #    - 학습 시 없었던 컬럼은 자동으로 제거됩니다.
         live_df_aligned = live_df.reindex(columns=self.feature_columns, fill_value=-100)
-
-        # 3. 방향(direction) 정보 One-Hot 인코딩 수동 적용
-        for col in self.feature_columns:
-            if col.startswith('dir_'):
-                live_df_aligned[col] = 0
         
-        if 'direction' in live_rssi_vector:
-            current_dir_col = f"dir_{live_rssi_vector['direction']}"
-            if current_dir_col in live_df_aligned.columns:
-                live_df_aligned[current_dir_col] = 1
+        # 4. dir_ 컬럼들의 fill_value가 -100이 아닌 0이 되도록 수정
+        dir_cols = [col for col in self.feature_columns if col.startswith('dir_')]
+        live_df_aligned[dir_cols] = live_df_aligned[dir_cols].replace(-100, 0)
 
-        # ▼▼▼ [최종 수정] NumPy 배열로 변환하지 않고 DataFrame을 그대로 사용 ▼▼▼
-        # 모델이 학습 시 DataFrame의 컬럼명을 기억하고 있으므로,
-        # 예측 시에도 DataFrame을 그대로 전달하는 것이 가장 안정적입니다.
+        # 5. 예측 수행
         predicted_label = self.model.predict(live_df_aligned)[0]
 
         return predicted_label
@@ -106,9 +108,9 @@ class LGBM_Classifier_Predictor:
             print("오류: 저장할 모델이 없습니다.")
             return
         
+        ## [수정] 꼭 필요한 정보(모델, 피처 컬럼)만 저장하도록 단순화
         model_data = {
             'model': self.model,
-            'beacon_columns': self.beacon_columns,
             'feature_columns': self.feature_columns
         }
         joblib.dump(model_data, path)
@@ -119,7 +121,6 @@ class LGBM_Classifier_Predictor:
         try:
             model_data = joblib.load(path)
             self.model = model_data['model']
-            self.beacon_columns = model_data['beacon_columns']
             self.feature_columns = model_data['feature_columns']
             print(f"✅ '{path}' 파일에서 모델을 성공적으로 불러왔습니다.")
             return True
@@ -131,7 +132,7 @@ if __name__ == '__main__':
     # --- 1. 모델 학습 후 저장 (최초 한 번만 실행) ---
     print("--- 모델 학습 및 저장 단계 ---")
     predictor_trainer = LGBM_Classifier_Predictor()
-    predictor_trainer.train() # test_size=0.3으로 실행됨
+    predictor_trainer.train()
     predictor_trainer.save_model()
     print("-" * 30)
 
@@ -147,6 +148,8 @@ if __name__ == '__main__':
             'C3:00:00:44:DC:1A': -67, 'C3:00:00:44:DC:1B': -60,
             'C3:00:00:44:DC:1C': -61, 'C3:00:00:44:DC:1D': -70,
             'C3:00:00:44:DC:1E': -62, 'C3:00:00:44:DC:1F': -57
+            # 학습 데이터에 있었지만 여기엔 없는 'C3:00:00:44:DC:1F' 같은 비콘은
+            # predict 메소드 내에서 자동으로 -100으로 처리됩니다.
         }
         
         predicted_pos_label = predictor_user.predict(live_data)
