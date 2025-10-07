@@ -195,7 +195,7 @@ class IndoorPositioningApp(QWidget):
         if event.key() == Qt.Key_R:
             print("'R' 키 입력 감지. pts_grid를 (2, 3)으로 수동 설정합니다.")
             try:
-                pts_grid = (0, 0)
+                pts_grid = (2, 3)
                 print(f"🎯 모델 예측 그리드 (수동 설정): {pts_grid}")
 
                 pts_pixels_qpoint = self.grid_to_pixels(pts_grid)
@@ -204,9 +204,10 @@ class IndoorPositioningApp(QWidget):
                 px_per_m_y = self.config.get('px_per_m_y', 1.0)
                 # pts_meters 계산식 수정
                 pts_meters = np.array([
-                    pts_pixels_qpoint.x() / px_per_m_x,
-                    pts_pixels_qpoint.y() / px_per_m_y
+                    pts_pixels_qpoint.x() * 19 / px_per_m_x,
+                    pts_pixels_qpoint.y() * 19 / px_per_m_y
                 ])
+                print(f"수동 설정 pts_meters: {pts_meters}" )
                 self.ekf.update(pts_meters)
                 self.fused_pos = self.ekf.get_state()[:2].flatten()
                 self.map_viewer.mark_estimated_position(*self.fused_pos, self.current_yaw)
