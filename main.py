@@ -195,7 +195,7 @@ class IndoorPositioningApp(QWidget):
         if event.key() == Qt.Key_R:
             print("'R' 키 입력 감지. pts_grid를 (2, 3)으로 수동 설정합니다.")
             try:
-                pts_grid = (2, 3)
+                pts_grid = (0, 0)
                 print(f"🎯 모델 예측 그리드 (수동 설정): {pts_grid}")
 
                 pts_pixels_qpoint = self.grid_to_pixels(pts_grid)
