@@ -230,8 +230,10 @@ class IndoorPositioningApp(QWidget):
         self.udp_receiver.start()
         self.robot_tracker.start()
 
-
+    # --- [수정됨] ---
     def _on_robot_position_update(self, px, py):
+        """로봇으로부터 위치를 수신하면 터미널에 출력하고 지도에 업데이트합니다."""
+        print(f"🤖 로봇 좌표 수신: ({px}, {py})")
         self.map_viewer.update_robot_position(px, py)
 
     def _send_position_udp(self):
