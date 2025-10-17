@@ -215,6 +215,15 @@ class IndoorPositioningApp(QWidget):
                 self._update_navigation_path()
             except Exception as e:
                 print(f"수동 위치 설정 중 오류 발생: {e}")
+        
+        # --- [수정됨] 엔터 키 입력 처리 ---
+        elif event.key() in [Qt.Key_Return, Qt.Key_Enter]:
+            print("엔터 키 입력 감지. 걸음 발생을 시뮬레이션합니다 (EKF predict).")
+            # _on_speed_update는 EKF predict, 위치 업데이트, 경로 재계산을 수행합니다.
+            self._on_speed_update(self.current_speed)
+            # predict 이후 변경된 위치를 지도에 시각적으로 반영합니다.
+            self.map_viewer.mark_estimated_position(*self.fused_pos, self.current_yaw)
+            
 
 
     def _start_timers(self):
@@ -553,8 +562,8 @@ class IndoorPositioningApp(QWidget):
             # 5. 보정된 위치를 지도에 즉시 반영하고 경로를 다시 계산합니다.
             self.map_viewer.mark_estimated_position(*self.fused_pos, self.current_yaw)
             print(f"✅ 벽 근접 보정 적용: 총 ({total_correction_m[0]:.3f}, {total_correction_m[1]:.3f})m | "
-                f"중앙 ({centering_vector_m[0]:.3f}, {centering_vector_m[1]:.3f})m + "
-                f"벽 ({repulsion_vector_m[0]:.3f}, {repulsion_vector_m[1]:.3f})m")
+                  f"중앙 ({centering_vector_m[0]:.3f}, {centering_vector_m[1]:.3f})m + "
+                  f"벽 ({repulsion_vector_m[0]:.3f}, {repulsion_vector_m[1]:.3f})m")
             self._update_navigation_path()
 
     def closeEvent(self, event):
