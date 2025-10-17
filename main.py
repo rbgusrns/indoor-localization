@@ -216,7 +216,6 @@ class IndoorPositioningApp(QWidget):
             except Exception as e:
                 print(f"수동 위치 설정 중 오류 발생: {e}")
         
-        # --- [수정됨] 엔터 키 입력 처리 ---
         elif event.key() in [Qt.Key_Return, Qt.Key_Enter]:
             print("엔터 키 입력 감지. 걸음 발생을 시뮬레이션합니다 (EKF predict).")
             # _on_speed_update는 EKF predict, 위치 업데이트, 경로 재계산을 수행합니다.
@@ -330,11 +329,20 @@ class IndoorPositioningApp(QWidget):
 
                     # 3. 예측된 레이블('x_y')을 좌표로 변환합니다.
                     x_str, y_str = predicted_label.split('_')
-                    pts_grid = (int(x_str)  , int(y_str) )
+                    predicted_grid = (int(x_str), int(y_str))
                     
-                    print(f"🎯 모델 예측 그리드: {pts_grid}")
+                    print(f"🎯 모델 예측 그리드: {predicted_grid}")
+
+                    # --- [수정됨] 현재 그리드와 예측 그리드 비교 로직 ---
+                    current_grid = self.meters_to_grid(self.fused_pos)
+                    if predicted_grid != current_grid:
+                        print(f"⚠️ 예측 그리드({predicted_grid})가 현재 그리드({current_grid})와 달라 무시합니다.")
+                        return # 예측값이 현재 위치와 다르면 EKF 업데이트를 수행하지 않음
                     
-                    pts_pixels_qpoint = self.grid_to_pixels(pts_grid)
+                    print(f"✅ 예측 그리드({predicted_grid})가 현재 그리드({current_grid})와 일치. EKF 업데이트를 진행합니다.")
+                    # --- 여기까지 수정 ---
+                    
+                    pts_pixels_qpoint = self.grid_to_pixels(predicted_grid)
 
                     px_per_m_x = self.config.get('px_per_m_x', 1.0)
                     px_per_m_y = self.config.get('px_per_m_y', 1.0)
